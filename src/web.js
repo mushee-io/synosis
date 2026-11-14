@@ -6,6 +6,7 @@ import { assertTransfer, describePermission, formatYocto, isFullAccess } from '.
 const RPC = 'https://rpc.testnet.near.org';
 const provider = new JsonRpcProvider({ url: RPC });
 const STORAGE_KEY = 'synosis.near.testnet.encrypted.wallet.v1';
+const NAME_KEY = 'synosis.near.testnet.public.named.account.v1';
 const $ = id => document.getElementById(id);
 const viewIds = ['start-view', 'create-view', 'backup-view', 'import-view', 'watch-view', 'unlock-view', 'dashboard-view'];
 let session = null;
@@ -133,6 +134,7 @@ async function loadDashboard() {
     }
   }
   $('do-send').disabled = !snapshot.secretKey || !snapshot.active || !isFullAccess(snapshot.permission);
+  renderNamedPanel();
 }
 
 async function enterDashboard(nextSession) {
@@ -147,6 +149,141 @@ function hexPublicKey(publicKey) {
     throw new Error('Could not derive a 32-byte NEAR implicit account address.');
   }
   return Array.from(data, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function normalizeTestnetName(value) {
+  const label = value.trim().toLowerCase().replace(/\\.testnet$/, '');
+  // Restrict to one top-level .testnet name; nested subaccounts are separate.
+  if (label.length < 2 || label.length > 56 ||
+      !/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(label)) {
+    throw new Error('Use 2–56 lowercase letters, numbers, hyphens or underscores, without spaces.');
+  }
+  return label + '.testnet';
+}
+
+function renderNamedPanel() {
+  const hasSigningKey = !!session?.secretKey;
+  let implicitId;
+  if (hasSigningKey) {
+    implicitId = hexPublicKey(KeyPair.fromString(session.secretKey).getPublicKey());
+  }
+  const canCreate = hasSigningKey &&
+    (session.accountId === implicitId || !!session.namedAccountId || isFullAccess(session.permission));
+  $('name-panel').hidden = !canCreate;
+  if (!canCreate) return;
+  const linked = !!session.namedAccountId;
+  $('linked-name-view').hidden = !linked;
+  $('linked-name').textContent = session.namedAccountId || '';
+  $('linked-implicit').textContent = implicitId;
+  $('name-input').disabled = linked;
+  $('check-name').hidden = linked;
+  $('create-name').hidden = linked;
+  $('switch-account').textContent = session.accountId === implicitId
+    ? 'Switch to ' + (session.namedAccountId || '.testnet account')
+    : 'Switch to long implicit address';
+  if (linked) {
+    $('name-status').textContent = session.accountId === session.namedAccountId
+      ? 'Using your .testnet account. The long address is a separate account with its own balance.'
+      : 'Using your implicit account. Switch to the .testnet name to view its separate balance.';
+  }
+}
+
+async function restoreNamedAccount(loaded) {
+  const saved = localStorage.getItem(NAME_KEY);
+  const namedAccountId = loaded.accountId.endsWith('.testnet') ? loaded.accountId : null;
+  const next = { ...loaded, namedAccountId, permission: null, active: false };
+  if (!saved || namedAccountId) return next;
+  try {
+    const link = JSON.parse(saved);
+    if (link.publicKey !== loaded.publicKey || !/^[a-z0-9]+(?:[-_][a-z0-9]+)*\\.testnet$/.test(link.accountId)) return next;
+    const permission = await permissionFor(link.accountId, loaded.publicKey);
+    if (isFullAccess(permission)) {
+      next.namedAccountId = link.accountId;
+      next.accountId = link.accountId;
+    }
+  } catch {
+    // Local public metadata is not authoritative. Preserve the original account.
+  }
+  return next;
+}
+
+async function checkNamedAvailability() {
+  if (!session?.secretKey) throw new Error('Unlock the wallet first.');
+  const name = normalizeTestnetName($('name-input').value);
+  const account = await accountInfo(name);
+  if (!account) {
+    $('name-status').textContent = name + ' appears available. Creation must still be confirmed on chain.';
+  } else {
+    try {
+      const permission = await permissionFor(name, session.publicKey);
+      $('name-status').textContent = isFullAccess(permission)
+        ? name + ' already belongs to this recovery phrase. Click Create/Link to use it.'
+        : name + ' is already registered but not controlled by this phrase.';
+    } catch {
+      $('name-status').textContent = name + ' is already taken. Try another name.';
+    }
+  }
+}
+
+async function createNamedAccount() {
+  if (!session?.secretKey) throw new Error('Unlock the wallet first.');
+  if (session.namedAccountId) throw new Error('This wallet already has a linked .testnet account.');
+  const implicitId = hexPublicKey(KeyPair.fromString(session.secretKey).getPublicKey());
+  // Do not create a full-access account from a public challenge/restricted phrase.
+  if (session.accountId !== implicitId && !isFullAccess(session.permission)) {
+    throw new Error('The current key is restricted. Create a new private wallet to register a name.');
+  }
+  const name = normalizeTestnetName($('name-input').value);
+  const existing = await accountInfo(name);
+  if (existing) {
+    let permission;
+    try { permission = await permissionFor(name, session.publicKey); } catch {}
+    if (!isFullAccess(permission)) throw new Error('That .testnet name is already taken by another key.');
+  } else {
+    if (!confirm('Register ' + name + ' on NEAR Testnet using your existing PUBLIC key? This is a separate blockchain account, controlled by the same recovery phrase.')) return;
+    const response = await fetch('/api/create-testnet-account', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newAccountId: name, newAccountPublicKey: session.publicKey })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.submitted) {
+      throw new Error(data.error || 'Testnet naming service unavailable; no account has been confirmed.');
+    }
+  }
+  let verified = false;
+  for (let attempt = 0; attempt < 7; attempt++) {
+    try {
+      const account = await accountInfo(name);
+      if (account) {
+        const permission = await permissionFor(name, session.publicKey);
+        if (!isFullAccess(permission)) throw new Error('The new name does not authorise this key.');
+        verified = true;
+        break;
+      }
+    } catch (error) {
+      if (/does not authorise/.test(error.message)) throw error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
+  if (!verified) {
+    $('name-status').textContent = 'Request submitted, but NEAR has not confirmed the account yet. Check the explorer and use this same name again to verify it.';
+    notice('Name creation was submitted but is not yet verified on-chain; it has not been linked.', true);
+    return;
+  }
+  // Store only the public account name and public key; the secret stays encrypted.
+  localStorage.setItem(NAME_KEY, JSON.stringify({ accountId: name, publicKey: session.publicKey }));
+  session.namedAccountId = name;
+  session.accountId = name;
+  await loadDashboard();
+  notice('Created and verified ' + name + ' on NEAR Testnet! This account and your long address have separate balances but use the same backed-up recovery phrase.');
+}
+
+async function switchAccount() {
+  if (!session?.secretKey || !session.namedAccountId) throw new Error('No verified named account linked.');
+  const implicitId = hexPublicKey(KeyPair.fromString(session.secretKey).getPublicKey());
+  session.accountId = session.accountId === implicitId ? session.namedAccountId : implicitId;
+  await loadDashboard();
+  notice('Switched to ' + session.accountId + '. Balance and send permissions now refer to this account.');
 }
 
 async function generateNewWallet() {
@@ -180,12 +317,12 @@ async function finishCreate() {
     accountId: pending.accountId, secretKey: pending.secretKey, publicKey: pending.publicKey
   }, pending.password);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-  const next = { accountId: pending.accountId, secretKey: pending.secretKey, publicKey: pending.publicKey, permission: null, active: false };
+  const next = { accountId: pending.accountId, secretKey: pending.secretKey, publicKey: pending.publicKey, namedAccountId: null, permission: null, active: false };
   pending = null;
   $('seed-words').replaceChildren();
   $('create-password').value = '';
   await enterDashboard(next);
-  notice('Wallet created and encrypted in this browser. Send testnet NEAR to its implicit address to activate it.');
+  notice('Wallet created and recovery phrase backed up. You can now create a .testnet name below without changing your recovery phrase.');
 }
 
 async function importWallet() {
@@ -201,7 +338,7 @@ async function importWallet() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   $('import-secret').value = '';
   $('import-password').value = '';
-  await enterDashboard({ accountId, secretKey, publicKey, permission, active: true });
+  await enterDashboard({ accountId, secretKey, publicKey, namedAccountId: accountId.endsWith('.testnet') ? accountId : null, permission, active: true });
   notice('Testnet key imported. Encrypted key material stays in this browser.');
 }
 
@@ -219,7 +356,7 @@ async function unlockWallet() {
   $('unlock-password').value = '';
   const key = KeyPair.fromString(loaded.secretKey).getPublicKey().toString();
   if (key !== loaded.publicKey) throw new Error('Stored signing key does not match the saved public key.');
-  await enterDashboard({ ...loaded, permission: null, active: false });
+  await enterDashboard(await restoreNamedAccount(loaded));
   notice('Wallet unlocked on this device.');
 }
 
@@ -257,6 +394,7 @@ async function inspectChallenge() {
 function forgetWallet() {
   if (!confirm('Erase the locally encrypted wallet from this browser? Ensure your recovery phrase is safely backed up first.')) return;
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(NAME_KEY);
   session = null;
   pending = null;
   $('unlock-password').value = '';
@@ -289,6 +427,19 @@ on('do-unlock', unlockWallet);
 on('do-refresh', loadDashboard);
 on('do-send', send);
 on('do-check', inspectChallenge);
+on('check-name', checkNamedAvailability);
+on('create-name', createNamedAccount);
+on('switch-account', switchAccount);
+on('copy-named', async () => {
+  if (!session?.namedAccountId) return;
+  await navigator.clipboard.writeText(session.namedAccountId);
+  notice('Named .testnet account copied.');
+});
+on('copy-implicit', async () => {
+  if (!session?.secretKey) return;
+  await navigator.clipboard.writeText(hexPublicKey(KeyPair.fromString(session.secretKey).getPublicKey()));
+  notice('Long implicit address copied.');
+});
 on('do-lock', lockWallet);
 on('do-forget', forgetWallet);
 on('clear-locked', forgetWallet);

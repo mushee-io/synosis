@@ -1,41 +1,38 @@
-name: Synosis CI
-
+name: Synosis web-first CI
 on:
   push:
     branches: [main]
   pull_request:
-
 permissions:
   contents: read
-
 jobs:
-  extension:
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install dependencies
+      - name: Install
         run: npm install --no-audit --no-fund
-      - name: Run permission tests
+      - name: Test permissions
         run: npm test
-      - name: Check application and challenge scripts
+      - name: Check scripts
         run: |
+          node --check src/web.js
           node --check src/main.js
           node --check scripts/deploy-vault.mjs
           node --check scripts/create-challenge.mjs
           node --check scripts/probe-restricted.mjs
           node --check scripts/owner-withdraw.mjs
-      - name: Build Chrome extension
+      - name: Build Vercel web app
         run: npm run build
-      - name: Archive extension (unpacked)
+      - name: Publish web artifact
         uses: actions/upload-artifact@v4
         with:
-          name: synosis-near-testnet-extension
+          name: synosis-web-testnet
           path: dist/
           if-no-files-found: error
-
   vault:
     runs-on: ubuntu-latest
     steps:
@@ -43,13 +40,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - name: Contract unit tests
+      - name: Test Rust vault
         run: cargo test --manifest-path contracts/vault/Cargo.toml
-      - name: Compile testnet WASM
+      - name: Build vault WASM
         run: cargo build --manifest-path contracts/vault/Cargo.toml --target wasm32-unknown-unknown --release
-      - name: Archive vault WASM
+      - name: Publish vault WASM
         uses: actions/upload-artifact@v4
         with:
-          name: synosis-testnet-vault-wasm
+          name: synosis-vault-wasm
           path: contracts/vault/target/wasm32-unknown-unknown/release/synosis_guard_vault.wasm
           if-no-files-found: error

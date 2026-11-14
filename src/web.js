@@ -539,6 +539,48 @@ async function send() {
   notice('Testnet transfer submitted. Transaction: ' + (result.transaction?.hash || 'check NEAR explorer'));
 }
 
+async function testNativeTransferRejection() {
+  if (!session?.secretKey || !session.active) {
+    throw new Error('Import the RESTRICTED challenge phrase first.');
+  }
+  const current = session;
+  const permission = await permissionFor(current.accountId, current.publicKey);
+  // Absolutely never probe using a full-access key.
+  if (isFullAccess(permission)) {
+    throw new Error('ABORTED: this is a full-access owner phrase. Do not use it for the public challenge.');
+  }
+  if (!permission?.FunctionCall && !permission?.GasKeyFunctionCall) {
+    throw new Error('The on-chain key does not have a verifiable restricted function-call permission.');
+  }
+  if (!confirm('Test a 1 yoctoNEAR native transfer to the SAME account using this restricted key? NEAR should reject the action. It will not test the owner phrase.')) return;
+  let rejection;
+  try {
+    // Bypass the wallet UI's local transfer blocker specifically to demonstrate
+    // NEAR protocol's enforcement on a restricted key.
+    const tx = await new Account(current.accountId, provider, current.secretKey)
+      .signAndSendTransaction({
+        receiverId: current.accountId,
+        actions: [actions.transfer(1n)],
+        waitUntil: 'FINAL'
+      });
+    rejection = tx?.status?.Failure ? JSON.stringify(tx.status.Failure) : null;
+    if (!rejection) {
+      notice('SECURITY TEST FAILED: NEAR accepted a native transfer from the supposed restricted key. Stop using this challenge.', true);
+      return;
+    }
+  } catch (error) {
+    rejection = [error?.message, error?.cause?.message,
+      error?.type, error?.name, JSON.stringify(error)].filter(Boolean).join(' ');
+  }
+  if (session !== current) return;
+  if (/RequiresFullAccess|requires(?: a)? full.access|requires full access key/i.test(rejection || '')) {
+    notice('ON-CHAIN WITHDRAWAL DENIED: NEAR rejected the native Transfer action with RequiresFullAccess. This restricted phrase cannot send native NEAR.');
+  } else {
+    notice('Withdrawal probe was inconclusive. NEAR returned a different error: ' +
+      String(rejection || 'unknown').slice(0, 240) + '. Do not claim a verified on-chain denial yet.', true);
+  }
+}
+
 async function inspectChallenge() {
   if (!session?.secretKey || !session.active) {
     notice('Import and unlock an active account key to inspect its on-chain permissions.', true);
@@ -597,6 +639,7 @@ on('do-unlock', unlockWallet);
 on('do-refresh', loadDashboard);
 on('do-send', send);
 on('do-check', inspectChallenge);
+on('do-live-denial-probe', testNativeTransferRejection);
 on('check-name', checkNamedAvailability);
 on('create-name', createNamedAccount);
 on('switch-account', switchAccount);

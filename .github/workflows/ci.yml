@@ -1,0 +1,54 @@
+name: Synosis CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run permission tests
+        run: npm test
+      - name: Check application and challenge scripts
+        run: |
+          node --check src/main.js
+          node --check scripts/deploy-vault.mjs
+          node --check scripts/create-challenge.mjs
+          node --check scripts/probe-restricted.mjs
+      - name: Build Chrome extension
+        run: npm run build
+      - name: Archive extension (unpacked)
+        uses: actions/upload-artifact@v4
+        with:
+          name: synosis-near-testnet-extension
+          path: dist/
+          if-no-files-found: error
+
+  vault:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Contract unit tests
+        run: cargo test --manifest-path contracts/vault/Cargo.toml
+      - name: Compile testnet WASM
+        run: cargo build --manifest-path contracts/vault/Cargo.toml --target wasm32-unknown-unknown --release
+      - name: Archive vault WASM
+        uses: actions/upload-artifact@v4
+        with:
+          name: synosis-testnet-vault-wasm
+          path: contracts/vault/target/wasm32-unknown-unknown/release/synosis_guard_vault.wasm
+          if-no-files-found: error

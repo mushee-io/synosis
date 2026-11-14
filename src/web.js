@@ -116,7 +116,9 @@ async function loadDashboard() {
   $('account-address').textContent = snapshot.accountId;
   $('activation').textContent = account
     ? 'Account confirmed on NEAR Testnet.'
-    : 'This account has not been activated. Fund the implicit address with testnet NEAR before using it.';
+    : snapshot.accountId.endsWith('.testnet')
+      ? 'Named account not found on NEAR Testnet. Verify its registration.'
+      : 'Implicit address not yet activated. Fund it with testnet NEAR.';
   if (!snapshot.secretKey) {
     $('key-type').textContent = 'Watch only';
     $('permission-details').textContent = 'No signing key is stored for this session.';
@@ -134,7 +136,19 @@ async function loadDashboard() {
       snapshot.permission = null;
     }
   }
-  $('do-send').disabled = !snapshot.secretKey || !snapshot.active || !isFullAccess(snapshot.permission);
+  const owner = !!snapshot.secretKey && snapshot.active && isFullAccess(snapshot.permission);
+  $('do-send').disabled = !owner;
+  $('role-explainer').textContent = !snapshot.secretKey
+    ? 'READ ONLY: public blockchain data, no signing rights.'
+    : owner
+      ? 'PRIVATE OWNER: can send NEAR, manage keys and withdraw. Never share the owner recovery phrase.'
+      : snapshot.permission?.FunctionCall || snapshot.permission?.GasKeyFunctionCall
+        ? 'PUBLIC CHALLENGE: balance visible, only the specified contract methods allowed. NEAR rejects native transfers and key-management actions.'
+        : 'No verified signing permissions; sending and key management disabled.';
+  $('send-mode-explainer').textContent = owner
+    ? 'Private owner mode: your full-access key can sign native transfers. Review every transaction.'
+    : 'Public/restricted or watch-only mode: sending native NEAR is blocked by on-chain key permissions.';
+  $('do-forget').textContent = snapshot.temporaryImport ? 'Exit session' : 'Forget';
   renderNamedPanel();
   renderChallengePanel();
 }
@@ -299,7 +313,10 @@ function renderChallengePanel() {
     session.accountId === session.namedAccountId &&
     session.active && isFullAccess(session.permission);
   $('challenge-panel').hidden = !canPublish;
-  if (!canPublish) clearPublicPhrase();
+  if (!canPublish) {
+    clearPublicPhrase();
+    $('public-key-list').replaceChildren();
+  }
 }
 
 function drawWords(words, element) {
@@ -353,6 +370,73 @@ async function generatePublicChallengePhrase() {
     'The named account does not need to implement ping for the transfer restriction to work. ' +
     'The private owner recovery phrase must remain secret.';
   notice('Restricted SECOND recovery phrase is now verified on NEAR Testnet. Only this displayed phrase may be shared for the challenge.');
+  try { await refreshPublicKeys(); } catch { /* The phrase remains visible even if key-list refresh fails. */ }
+}
+
+async function refreshPublicKeys() {
+  if (!session?.secretKey || !session.active || !isFullAccess(session.permission) ||
+      session.accountId !== session.namedAccountId) {
+    throw new Error('Only the verified private owner can manage account keys.');
+  }
+  const accountId = session.accountId;
+  const keys = await rpc('query', {
+    request_type: 'view_access_key_list', account_id: accountId, finality: 'final'
+  });
+  if (session.accountId !== accountId) return;
+  const container = $('public-key-list');
+  container.replaceChildren();
+  let restrictedCount = 0;
+  for (const key of keys.keys || []) {
+    const permission = key.access_key?.permission;
+    const restricted = !!permission?.FunctionCall;
+    if (restricted) restrictedCount++;
+    const entry = document.createElement('div');
+    entry.className = 'key-record';
+    const info = document.createElement('div');
+    const label = document.createElement('strong');
+    label.textContent = restricted ? 'Restricted challenge key' : isFullAccess(permission) ? 'Full-access owner key' : 'Other account key';
+    const detail = document.createElement('code');
+    detail.textContent = key.public_key;
+    info.append(label, detail);
+    entry.append(info);
+    if (restricted && key.public_key !== session.publicKey) {
+      const revoke = document.createElement('button');
+      revoke.className = 'tiny danger';
+      revoke.textContent = 'Revoke';
+      revoke.addEventListener('click', () => task(async () => revokePublicKey(key.public_key)));
+      entry.append(revoke);
+    }
+    container.append(entry);
+  }
+  if (!restrictedCount) {
+    const empty = document.createElement('p');
+    empty.className = 'micro';
+    empty.textContent = 'No restricted keys found on this account.';
+    container.append(empty);
+  }
+}
+
+async function revokePublicKey(publicKey) {
+  if (!session?.secretKey || !session.active || !isFullAccess(session.permission) ||
+      session.accountId !== session.namedAccountId ||
+      publicKey === session.publicKey) {
+    throw new Error('Only the private owner can revoke a different restricted key.');
+  }
+  const accountId = session.accountId;
+  const current = await permissionFor(accountId, publicKey);
+  if (!current?.FunctionCall) throw new Error('Refusing to revoke a key that is not a function-call key.');
+  if (!confirm('Revoke this public challenge key on ' + accountId + '? Anyone using its phrase will lose signing access.')) return;
+  const result = await new Account(accountId, provider, session.secretKey).deleteKey(publicKey);
+  if (result?.status?.Failure) throw new Error('NEAR rejected revoking the public key.');
+  const keys = await rpc('query', {
+    request_type: 'view_access_key_list', account_id: accountId, finality: 'final'
+  });
+  if (keys.keys?.some(key => key.public_key === publicKey)) {
+    throw new Error('Revocation submitted, but the key still appears on chain. Verify in explorer.');
+  }
+  if (publicChallengePhrase) clearPublicPhrase();
+  await refreshPublicKeys();
+  notice('Restricted public challenge key revoked on NEAR Testnet. Your owner key remains active.');
 }
 
 async function generateNewWallet() {
@@ -402,12 +486,23 @@ async function importWallet() {
   const account = await accountInfo(accountId);
   if (!account) throw new Error('This account is not active on NEAR Testnet yet.');
   const permission = await permissionFor(accountId, publicKey);
-  const saved = await encryptWallet({ accountId, secretKey, publicKey }, password);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  const existingWallet = !!localStorage.getItem(STORAGE_KEY);
+  if (!existingWallet) {
+    const saved = await encryptWallet({ accountId, secretKey, publicKey }, password);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  }
   $('import-secret').value = '';
   $('import-password').value = '';
-  await enterDashboard({ accountId, secretKey, publicKey, namedAccountId: accountId.endsWith('.testnet') && isFullAccess(permission) ? accountId : null, permission, active: true });
-  notice('Testnet key imported. Encrypted key material stays in this browser.');
+  await enterDashboard({
+    accountId, secretKey, publicKey,
+    namedAccountId: accountId.endsWith('.testnet') && isFullAccess(permission) ? accountId : null,
+    temporaryImport: existingWallet, permission, active: true
+  });
+  notice(existingWallet
+    ? 'Phrase imported for this session only. Your previously saved encrypted wallet was NOT overwritten.'
+    : isFullAccess(permission)
+      ? 'PRIVATE OWNER phrase imported and encrypted. This key can transfer NEAR: keep it secret.'
+      : 'PUBLIC RESTRICTED phrase imported and encrypted. Balance is visible; native NEAR transfers are blocked.');
 }
 
 async function watchAccount() {
@@ -460,6 +555,11 @@ async function inspectChallenge() {
 }
 
 function forgetWallet() {
+  if (session?.temporaryImport) {
+    lockWallet();
+    notice('Temporary imported session exited. Your previously saved wallet was not changed.');
+    return;
+  }
   if (!confirm('Erase the locally encrypted wallet from this browser? Ensure your recovery phrase is safely backed up first.')) return;
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(NAME_KEY);
@@ -501,6 +601,7 @@ on('check-name', checkNamedAvailability);
 on('create-name', createNamedAccount);
 on('switch-account', switchAccount);
 on('make-public-phrase', generatePublicChallengePhrase);
+on('list-public-keys', refreshPublicKeys);
 on('copy-public-phrase', async () => {
   if (!publicChallengePhrase) throw new Error('No restricted public phrase available to copy.');
   await navigator.clipboard.writeText(publicChallengePhrase);

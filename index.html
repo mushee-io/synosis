@@ -83,6 +83,23 @@
             </div>
             <div class="panel permission-panel"><div class="card-kicker">ACCESS KEY SECURITY</div><div class="permission-title" id="key-type">Checking…</div><p id="permission-details" class="muted"></p><div class="rule"><span class="status-light"></span> Checked against NEAR Testnet</div></div>
           </div>
+          <div id="name-panel" class="panel name-panel" hidden>
+            <div class="name-head"><div><div class="eyebrow">FRIENDLY ACCOUNT NAME</div><h3>Get your own .testnet name</h3></div><span class="chip">NEAR TESTNET</span></div>
+            <p class="muted">Use the same recovery phrase for your long implicit address and a new named account. NEAR treats them as two separate accounts with independently held balances.</p>
+            <div class="name-form">
+              <div class="name-field"><label for="name-input">Choose a wallet name</label><input id="name-input" placeholder="yourname" autocomplete="off" spellcheck="false" maxlength="56"></div>
+              <span class="name-suffix">.testnet</span>
+            </div>
+            <p id="name-status" class="muted">Names must be available. Creation is sponsored by the NEAR Testnet helper and may be rate-limited.</p>
+            <button id="check-name" class="secondary">Check name availability</button>
+            <button id="create-name" class="primary">Create named testnet account</button>
+            <div id="linked-name-view" hidden>
+              <div class="address-line name-account-line"><code id="linked-name"></code><button id="copy-named" class="tiny">Copy name</button></div>
+              <div class="address-line name-account-line"><code id="linked-implicit"></code><button id="copy-implicit" class="tiny">Copy long address</button></div>
+              <button id="switch-account" class="secondary">Switch between named and long addresses</button>
+              <p class="micro">Both addresses use the same backed-up key but they are separate NEAR accounts. The balance above belongs only to the currently selected address.</p>
+            </div>
+          </div>
           <div class="dashboard-grid bottom">
             <div class="panel"><h3>Send testnet NEAR</h3><p class="muted">Transfers are signed locally and broadcast to the testnet network.</p>
               <label for="send-to">Recipient address</label><input id="send-to" placeholder="recipient.testnet" autocomplete="off" spellcheck="false">

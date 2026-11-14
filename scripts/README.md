@@ -44,6 +44,20 @@ export PUBLIC_CHALLENGE_SEED_PHRASE="<restricted words printed by setup>"
 node scripts/probe-restricted.mjs
 ```
 
+To prove that only the independent owner can release funds, use a **separate**
+owner key locally (not in the extension and never in the public challenge):
+
+```sh
+export VAULT_OWNER_PRIVATE_KEY="ed25519:<private key of owner-name.testnet>"
+export WITHDRAW_RECEIVER_ACCOUNT_ID="destination.testnet"
+export WITHDRAW_AMOUNT_NEAR="0.1"
+export CONFIRM_WITHDRAWAL="YES"
+node scripts/owner-withdraw.mjs
+```
+
+This submits a real **testnet** withdrawal transaction, so verify the destination
+and amount before setting the confirmation variable. Do not publish either private key.
+
 The challenge key is only authorised to invoke the vault's `ping` method. It cannot submit native transfer actions. The contract's `withdraw` method can only be called by the separately configured owner account. A participant with a genuine **full-access** key to the vault account could still transfer or replace the contract, so **never share it or describe this as protection against a leaked full-access key**.
 
 No deployment or live testnet proof is implied by the source code being present.

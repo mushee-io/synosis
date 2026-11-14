@@ -62,7 +62,8 @@
           <label for="import-id">NEAR account ID</label><input id="import-id" placeholder="example.testnet or 64-character implicit address" autocomplete="off" spellcheck="false">
           <label for="import-secret">12/24-word phrase or ed25519 private key</label><textarea id="import-secret" rows="3" placeholder="Enter recovery phrase" autocomplete="off" spellcheck="false"></textarea>
           <label for="import-password">Local unlock password (at least 10 characters)</label><input id="import-password" type="password" autocomplete="new-password" placeholder="Encrypt your imported key">
-          <button id="do-import" class="primary">Import encrypted wallet</button>
+          <p class="micro">A restricted public challenge phrase gives you balance visibility but cannot authorise NEAR transfers. If a wallet is already saved in this browser, importing another phrase will create a temporary session instead of replacing it.</p>
+          <button id="do-import" class="primary">Import wallet phrase</button>
         </section>
         <section id="watch-view" class="panel narrow" hidden>
           <div class="panel-top"><button class="back" data-back>← Back</button><span class="chip">READ ONLY</span></div>
@@ -84,7 +85,7 @@
               <div class="balance"><span id="balance">0.00</span> <small>NEAR</small></div>
               <p id="activation" class="muted"></p><div class="balance-bottom"><code id="account-address"></code><button id="copy-account" class="tiny">Copy address</button></div>
             </div>
-            <div class="panel permission-panel"><div class="card-kicker">ACCESS KEY SECURITY</div><div class="permission-title" id="key-type">Checking…</div><p id="permission-details" class="muted"></p><div class="rule"><span class="status-light"></span> Checked against NEAR Testnet</div></div>
+            <div class="panel permission-panel"><div class="card-kicker">ACCESS KEY SECURITY</div><div class="permission-title" id="key-type">Checking…</div><p id="permission-details" class="muted"></p><p id="role-explainer" class="muted">NEAR permissions are checked on-chain.</p><div class="rule"><span class="status-light"></span> Checked against NEAR Testnet</div></div>
           </div>
           <div id="name-panel" class="panel name-panel" hidden>
             <div class="name-head"><div><div class="eyebrow">FRIENDLY ACCOUNT NAME</div><h3>Get your own .testnet name</h3></div><span class="chip">NEAR TESTNET</span></div>
@@ -113,10 +114,15 @@
               <button id="copy-public-phrase" class="primary">Copy restricted phrase</button>
               <p id="public-challenge-details" class="micro"></p>
             </div>
-            <p class="micro">Restricted-key demo is NOT security against a leaked full-access owner phrase. No funds or keys are deposited with Synosis servers.</p>
+            <p class="micro">The public phrase is visible only once; save the copied phrase separately before leaving. The owner phrase must never be published. This challenge does NOT protect against disclosure of the owner's full-access phrase.</p>
+            <div class="challenge-divider"></div>
+            <h3>Manage public challenge keys</h3>
+            <p class="muted">Inspect registered on-chain keys and revoke a restricted challenge key if you need to stop public access.</p>
+            <button id="list-public-keys" class="secondary">Refresh account keys</button>
+            <div id="public-key-list" class="public-key-list"></div>
           </div>
           <div class="dashboard-grid bottom">
-            <div class="panel"><h3>Send testnet NEAR</h3><p class="muted">Transfers are signed locally and broadcast to the testnet network.</p>
+            <div class="panel"><h3>Send testnet NEAR</h3><p id="send-mode-explainer" class="muted">Only a verified private owner key can transfer funds. Public restricted keys cannot.</p>
               <label for="send-to">Recipient address</label><input id="send-to" placeholder="recipient.testnet" autocomplete="off" spellcheck="false">
               <label for="send-amount">Amount (NEAR)</label><input id="send-amount" inputmode="decimal" placeholder="0.01" autocomplete="off">
               <button id="do-send" class="primary">Send testnet NEAR</button>

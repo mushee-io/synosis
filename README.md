@@ -1,30 +1,44 @@
-# Synosis — NEAR Testnet Wallet & Challenge
+# Synosis — NEAR Testnet Web Wallet
 
-Synosis is a Chrome Manifest V3 wallet for **NEAR Testnet only**. It can import a NEAR mnemonic/private key, show native NEAR balances and on-chain access-key permissions, and send testnet NEAR when — and only when — the imported key has full access.
+**Web-first testing on Vercel; Chrome extension packaging comes later.**
 
-The public withdrawal challenge is based on **NEAR restricted function-call access keys**. Importing a *restricted* challenge key lets anyone view the balance, but NEAR itself will reject native transfers signed by that key. This security claim **does not apply to a full-access seed phrase**; never publish the owner's full-access key. The restricted key is not a magical unwithdrawable wallet and not sufficient to demonstrate two-factor authentication against full-key compromise.
+This repository contains a browser-based **NEAR Testnet only** wallet with:
 
-## Quick start
+- New wallet generation: 12-word local recovery phrase and 64-character NEAR implicit account address.
+- Encrypted client-only key storage using AES-GCM and PBKDF2 (the password never leaves the browser).
+- Backup confirmation before key storage; local phrase display is cleared afterward.
+- Import with an existing NEAR Testnet phrase/private key, or watch an account without a signing key.
+- Testnet balance, native NEAR transfers from verified full-access keys, and restricted-key inspection.
+- NEAR smart-contract vault and testnet public challenge scripts (see [scripts/README.md](scripts/README.md)).
+- **No mainnet support, no backend wallet custody, no server-side secret storage.**
+
+## Web testing
+
 ```bash
 npm install
+npm test
 npm run build
+npm run preview
 ```
-Open `chrome://extensions` → Developer mode → **Load unpacked** → select `dist/`.
 
-## Features
-- NEAR Testnet only. No mainnet fallback.
-- Read balances and access-key permissions directly from the chain.
-- Import a challenge mnemonic or ed25519 secret key; encrypt it with a local password (PBKDF2/AES-GCM).
-- Watch any testnet account without storing a key.
-- Full-access accounts can send testnet NEAR.
-- Restricted keys are prevented from initiating native transfers (both in UI and by NEAR protocol).
-- Challenge creation script lets the owner add a restricted function-call key; the original full-access owner key is never published.
+The web build is generated in `dist/` and can be deployed to Vercel as a **Vite** project (root `/`, build command `npm run build`, output `dist`).
 
-## Challenge workflow
-1. Create a **dedicated testnet account** with a full-access key you keep confidential. Fund it with only testnet tokens.
-2. Run the challenge setup script (see `scripts/README.md`) to add a newly generated restricted key for a harmless contract method.
-3. Publish **only** the generated restricted mnemonic and the account name.
-4. Participants can import that mnemonic; on-chain permission says FunctionCall and native transfers are blocked.
-5. Have an independent tester reproduce on a separate NEAR client. The owner's private key never goes into GitHub or a public website.
+Never upload phrases, decrypted keys, passwords, vault-owner secrets, or GitHub repository secrets to Vercel. Use **only generated testnet phrases** for experiments. The local encrypted copy is kept in browser localStorage and can be erased from the app; recovery relies on your offline phrase backup.
 
-**Security warning:** This is a testnet-only proof of NEAR's access-key permissions, not a production audited custody product. A full-access key for the account can transfer the balance; a private-key disclosure challenge must not claim otherwise. No contract deployment or live challenge has been verified yet.
+## Web challenge
+
+1. Create/fund a dedicated NEAR Testnet vault account; separately create an account to act as the authorised owner.
+2. Deploy and initialize the vault contract, then add a restricted function-call key permitted only to call `ping` on that vault.
+3. **Publish only the restricted challenge phrase** and the account ID. Keep full-access keys private.
+4. Participants can import the phrase in the web wallet; balance is visible but the key lacks native-transfer authority.
+5. Run the independent negative-transaction and positive-owner-withdrawal tests, recording actual on-chain receipts.
+
+A restricted key **cannot** authorize a transfer, but this does not prove 2FA protection against disclosure of a real full-access phrase. The demo is not a production-audited wallet and must never be promoted as such.
+
+## Chrome extension later
+
+The original extension proof-of-concept remains in `popup.html`, `src/main.js`, and `public/manifest.json`. It is **not the current release target**. First verify web builds, encrypted key recovery, activation, full-access sends, and the vault challenge. Then port tested web code into Manifest V3 and repeat security testing.
+
+## Status
+
+Source files are committed. Neither Vercel deployment readiness nor on-chain contract execution should be assumed without checking deployment status, chain transaction receipts, and test logs.

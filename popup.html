@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synosis Wallet</title>
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <div class="brand"><div class="logo">S</div><div><strong>Synosis</strong><small>Secure testnet wallet</small></div></div>
+      <span class="network">● NEAR TESTNET</span>
+    </header>
+    <div id="alert" class="alert" role="status" aria-live="polite" hidden></div>
+    <section id="onboarding" class="panel">
+      <h2>Connect your account</h2>
+      <p class="muted">Import a NEAR testnet key or explore an account in watch-only mode.</p>
+      <label for="account-input">Account ID</label>
+      <input id="account-input" type="text" placeholder="your-account.testnet" autocomplete="off" spellcheck="false">
+      <label for="seed-input">Mnemonic or ed25519 private key</label>
+      <textarea id="seed-input" rows="3" placeholder="12-word seed phrase or ed25519:..." autocomplete="off" spellcheck="false"></textarea>
+      <label for="new-password">Local unlock password (minimum 10 characters)</label>
+      <input id="new-password" type="password" placeholder="Encrypt imported key" autocomplete="new-password">
+      <button id="import-button" class="primary">Import encrypted wallet</button>
+      <button id="watch-button" class="secondary">Watch account without a key</button>
+      <p class="note">Never enter the owner's full-access seed phrase for a public challenge. Only publish a restricted key.</p>
+    </section>
+    <section id="unlock-panel" class="panel" hidden>
+      <h2>Unlock wallet</h2>
+      <p id="saved-account" class="muted"></p>
+      <label for="unlock-password">Password</label>
+      <input id="unlock-password" type="password" placeholder="Your local password" autocomplete="current-password">
+      <button id="unlock-button" class="primary">Unlock</button>
+    </section>
+    <section id="wallet-panel" hidden>
+      <div class="balance panel">
+        <div class="between"><span class="muted">Available balance</span><button id="refresh-button" class="text-button">Refresh ↻</button></div>
+        <div class="amount"><span id="near-balance">—</span> <span class="unit">NEAR</span></div>
+        <div class="between"><span id="wallet-account" class="mono short">—</span><button id="copy-button" class="text-button">Copy</button></div>
+        <div class="divider"></div>
+        <div class="between"><span class="muted">Access-key permission</span><span id="permission" class="pill">—</span></div>
+        <p id="permission-info" class="note"></p>
+      </div>
+      <div class="panel">
+        <h2>Send NEAR</h2>
+        <p class="muted">Transfers use NEAR Testnet only.</p>
+        <label for="recipient">Recipient</label>
+        <input id="recipient" type="text" placeholder="recipient.testnet" autocomplete="off" spellcheck="false">
+        <label for="amount">Amount (NEAR)</label>
+        <input id="amount" type="text" inputmode="decimal" placeholder="0.01" autocomplete="off">
+        <button id="send-button" class="primary">Send testnet NEAR</button>
+        <button id="challenge-button" class="secondary">Test withdrawal permissions</button>
+      </div>
+      <div class="panel">
+        <h2>Challenge rules</h2>
+        <p class="muted">A restricted FunctionCall key cannot authorize native NEAR transfers, even in a different client. A full-access key can. The protection is enforced by NEAR's consensus rules, not by this extension.</p>
+        <div class="between"><button id="lock-button" class="text-button">Lock</button><button id="forget-button" class="text-button danger">Forget this wallet</button></div>
+      </div>
+    </section>
+    <footer>TESTNET ONLY · Do not store real funds</footer>
+  </main>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

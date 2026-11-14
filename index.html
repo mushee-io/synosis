@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071c16">
+  <meta name="description" content="Synosis: NEAR Testnet wallet and public restricted-key challenge. Web beta.">
+  <title>Synosis | NEAR Testnet Web Wallet</title>
+  <link rel="stylesheet" href="/src/web.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="emblem">S</div><div><strong>synosis<span class="dot">.</span></strong><small>NEAR SECURE WALLET</small></div></div>
+      <div class="sidebar-divider"></div>
+      <div class="nav-label">WORKSPACE</div>
+      <div class="nav active"><span>◈</span> Wallet overview</div>
+      <div class="nav"><span>⌑</span> Testnet challenge</div>
+      <div class="sidebar-spacer"></div>
+      <div class="sidenote"><span class="status-light"></span> NEAR TESTNET <span class="tag">BETA</span></div>
+      <p class="sidebar-foot">Web-first test build. Mainnet transfers disabled.</p>
+    </aside>
+    <div class="page">
+      <header class="topbar"><div class="crumb">Workspace <span>/</span> <b>Wallet</b></div><div class="top-right"><span class="status-light"></span> NEAR Testnet <span class="profile">S</span></div></header>
+      <main>
+        <div class="hero"><div><div class="eyebrow">SYNOSIS / WEB BETA</div><h1>Take control of your <em>NEAR.</em></h1><p>Testnet wallet with transparent, on-chain key permissions. Create, import, and inspect accounts before we package the Chrome extension.</p></div><div class="hero-glyph">◈</div></div>
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+        <section id="start-view">
+          <div class="section-head"><h2>Get started</h2><span>Choose how to access your wallet</span></div>
+          <div class="tiles">
+            <button id="choose-create" class="tile"><span class="tile-icon">＋</span><strong>Create a new wallet</strong><span>Generate a 12-word recovery phrase locally, then activate your testnet address.</span><b>Create wallet ↗</b></button>
+            <button id="choose-import" class="tile"><span class="tile-icon">↧</span><strong>Import a wallet</strong><span>Open an existing account with its mnemonic or NEAR private key.</span><b>Import wallet ↗</b></button>
+            <button id="choose-watch" class="tile"><span class="tile-icon">◉</span><strong>Watch an account</strong><span>View balances and on-chain status without exposing any signing key.</span><b>Watch only ↗</b></button>
+          </div>
+          <div class="info-strip"><strong>Public withdrawal challenge</strong><p>A restricted function-call key lets participants see NEAR but cannot authorise native transfers. This is not protection against disclosure of a full-access key.</p></div>
+        </section>
+
+        <section id="create-view" class="panel narrow" hidden>
+          <div class="panel-top"><button class="back" data-back>← Back</button><span class="chip">1 / 2</span></div>
+          <h2>Make your new wallet</h2><p class="muted">Your recovery phrase is created in your browser. Choose a password to encrypt the local copy of your key.</p>
+          <label for="create-password">Local password (at least 10 characters)</label>
+          <input id="create-password" type="password" autocomplete="new-password" placeholder="Create a strong password">
+          <button id="generate-seed" class="primary">Generate recovery phrase</button>
+          <div class="security-note">Use testnet tokens only. Do not reuse any recovery phrase from a real wallet.</div>
+        </section>
+        <section id="backup-view" class="panel narrow" hidden>
+          <div class="panel-top"><span class="eyebrow">BACK UP YOUR WALLET</span><span class="chip">2 / 2</span></div>
+          <h2>Write down these 12 words</h2><p class="muted">Keep them in order, offline. Anyone who sees them can control this wallet. Synosis will not show this phrase again after you confirm.</p>
+          <div id="seed-words" class="words"></div>
+          <label>New testnet address</label><div class="address-line"><code id="new-address"></code><button id="copy-new-address" class="tiny">Copy</button></div>
+          <label class="check"><input type="checkbox" id="backup-confirm"> I've saved the recovery phrase offline, in order.</label>
+          <button id="finish-create" class="primary" disabled>Save encrypted wallet & continue</button>
+        </section>
+
+        <section id="import-view" class="panel narrow" hidden>
+          <div class="panel-top"><button class="back" data-back>← Back</button><span class="chip">TESTNET</span></div>
+          <h2>Import an existing wallet</h2><p class="muted">The entered phrase is converted into a signing key locally. It is never sent to our server.</p>
+          <label for="import-id">NEAR account ID</label><input id="import-id" placeholder="example.testnet or 64-character implicit address" autocomplete="off" spellcheck="false">
+          <label for="import-secret">12/24-word phrase or ed25519 private key</label><textarea id="import-secret" rows="3" placeholder="Enter recovery phrase" autocomplete="off" spellcheck="false"></textarea>
+          <label for="import-password">Local unlock password (at least 10 characters)</label><input id="import-password" type="password" autocomplete="new-password" placeholder="Encrypt your imported key">
+          <button id="do-import" class="primary">Import encrypted wallet</button>
+        </section>
+        <section id="watch-view" class="panel narrow" hidden>
+          <div class="panel-top"><button class="back" data-back>← Back</button><span class="chip">READ ONLY</span></div>
+          <h2>Watch any testnet account</h2><p class="muted">No seed phrase required. Send and withdrawal features will stay disabled.</p>
+          <label for="watch-id">Account ID</label><input id="watch-id" placeholder="vault.testnet" autocomplete="off" spellcheck="false">
+          <button id="do-watch" class="primary">View account</button>
+        </section>
+        <section id="unlock-view" class="panel narrow" hidden>
+          <div class="panel-top"><span class="eyebrow">WELCOME BACK</span><button id="clear-locked" class="back">Forget wallet</button></div>
+          <h2>Unlock Synosis</h2><p class="muted">Decrypt your saved key on this device.</p>
+          <label for="unlock-password">Local password</label><input id="unlock-password" type="password" autocomplete="current-password" placeholder="Enter password">
+          <button id="do-unlock" class="primary">Unlock wallet</button>
+        </section>
+        <section id="dashboard-view" hidden>
+          <div class="section-head"><h2>Wallet overview</h2><div><button id="do-refresh" class="tiny">↻ Refresh</button><button id="do-lock" class="tiny">Lock</button><button id="do-forget" class="tiny danger">Forget</button></div></div>
+          <div class="dashboard-grid">
+            <div class="balance-card">
+              <div class="card-kicker">TOTAL BALANCE <span class="testnet-chip">TESTNET</span></div>
+              <div class="balance"><span id="balance">0.00</span> <small>NEAR</small></div>
+              <p id="activation" class="muted"></p><div class="balance-bottom"><code id="account-address"></code><button id="copy-account" class="tiny">Copy address</button></div>
+            </div>
+            <div class="panel permission-panel"><div class="card-kicker">ACCESS KEY SECURITY</div><div class="permission-title" id="key-type">Checking…</div><p id="permission-details" class="muted"></p><div class="rule"><span class="status-light"></span> Checked against NEAR Testnet</div></div>
+          </div>
+          <div class="dashboard-grid bottom">
+            <div class="panel"><h3>Send testnet NEAR</h3><p class="muted">Transfers are signed locally and broadcast to the testnet network.</p>
+              <label for="send-to">Recipient address</label><input id="send-to" placeholder="recipient.testnet" autocomplete="off" spellcheck="false">
+              <label for="send-amount">Amount (NEAR)</label><input id="send-amount" inputmode="decimal" placeholder="0.01" autocomplete="off">
+              <button id="do-send" class="primary">Send testnet NEAR</button>
+            </div>
+            <div class="panel"><h3>Protected withdrawal challenge</h3><p class="muted">Inspect whether the current key has permission to transfer native NEAR. Restricted keys cannot, even from another wallet application.</p>
+              <div class="challenge-divider"></div><div class="feature-line"><span>◈</span><div><strong>On-chain permissions</strong><small>Not just an interface restriction</small></div></div>
+              <button id="do-check" class="secondary">Check withdrawal permissions</button>
+              <p class="micro">Checking permissions is not the same as successfully submitting a negative transaction test.</p>
+            </div>
+          </div>
+        </section>
+      </main>
+      <footer>© 2026 SYNOSIS • NEAR TESTNET ONLY • EXPERIMENTAL SOFTWARE • DO NOT USE WITH REAL FUNDS</footer>
+    </div>
+  </div>
+  <script type="module" src="/src/web.js"></script>
+</body>
+</html>

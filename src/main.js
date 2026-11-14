@@ -77,8 +77,8 @@ async function displayWallet() {
   $('permission-info').textContent = current.secretKey
     ? describePermission(permission)
     : 'Watch-only account: this extension holds no signing key.';
-  $('send-button').disabled = busy || !current.secretKey || !isFullAccess(permission);
-  $('send-button').textContent = current.secretKey && !isFullAccess(permission) ? 'Transfer blocked on-chain' : 'Send testnet NEAR';
+  $('send-button').disabled = busy || !current.secretKey;
+  $('send-button').textContent = current.secretKey && !isFullAccess(permission) ? 'Attempt withdrawal (challenge)' : 'Send testnet NEAR';
 }
 
 function showPanel(name) {
@@ -177,7 +177,7 @@ function on(id, handler) {
     catch (error) { console.error(error); notify(error.message || String(error), true); }
     finally {
       setBusy(false);
-      if (session) $('send-button').disabled = !session.secretKey || !isFullAccess(session.permission);
+      if (session) $('send-button').disabled = !session.secretKey;
     }
   });
 }

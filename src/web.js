@@ -304,7 +304,7 @@ function renderChallengePanel() {
 
 function drawWords(words, element) {
   element.replaceChildren();
-  words.split(/\\s+/).forEach((word, index) => {
+  words.split(/\s+/).forEach((word, index) => {
     const cell = document.createElement('div');
     const number = document.createElement('span');
     const label = document.createElement('strong');

@@ -31,7 +31,7 @@ function setBusy(value) {
   busy = value;
   document.querySelectorAll('button').forEach(button => { button.disabled = value; });
   if (!value) {
-    $('finish-create').disabled = !$('backup-confirm').checked;
+    $('finish-create').disabled = !pending || !$('backup-confirm').checked;
     const allowed = !!session?.secretKey && isFullAccess(session.permission) && session.active;
     $('do-send').disabled = !allowed;
   }
@@ -452,29 +452,100 @@ async function generateNewWallet() {
   pending = { accountId, seedPhrase: generated.seedPhrase, secretKey: generated.secretKey, publicKey: kp.getPublicKey().toString(), password };
   drawWords(generated.seedPhrase, $('seed-words'));
   $('new-address').textContent = accountId;
+  $('backup-name-input').value = $('initial-name').value.trim();
   $('backup-confirm').checked = false;
+  $('seed-words').hidden = false;
+  $('owner-words-hidden').hidden = true;
+  $('toggle-owner-words').hidden = false;
+  $('toggle-owner-words').textContent = 'Hide private words';
+  $('finish-create').hidden = false;
+  $('backup-retry-name').hidden = true;
+  $('backup-generate-public').hidden = true;
+  $('backup-public-ready').hidden = true;
+  $('backup-open-wallet').hidden = true;
+  $('backup-public-words').replaceChildren();
+  $('backup-public-pending').hidden = false;
+  $('backup-name-input').disabled = false;
+  $('backup-name-status').textContent = 'Back up your PRIVATE phrase first. The separate PUBLIC challenge phrase comes after .testnet registration.';
   show('backup-view');
   $('finish-create').disabled = true;
 }
 
+function syncSetup() {
+  const verified = !!session?.namedAccountId &&
+    session.accountId === session.namedAccountId && session.active &&
+    isFullAccess(session.permission);
+  $('backup-retry-name').hidden = verified || !session?.secretKey;
+  $('backup-generate-public').hidden = !verified || !!publicChallengePhrase;
+  $('backup-open-wallet').hidden = !session?.secretKey;
+  $('backup-name-input').disabled = verified;
+  if (verified) {
+    $('backup-name-status').textContent = 'NEAR Testnet verified ' + session.namedAccountId +
+      ' with your PRIVATE owner key. Generate the SECOND restricted recovery phrase.';
+    $('backup-public-pending').textContent = 'Name confirmed on-chain. Create the restricted PUBLIC challenge phrase below.';
+  }
+}
+async function registerNameOnSetup() {
+  if (!session?.secretKey) throw new Error('Save your owner phrase first.');
+  $('name-input').value = $('backup-name-input').value.trim();
+  $('backup-name-status').textContent = 'Registering and verifying the .testnet account…';
+  try {
+    await createNamedAccount();
+    syncSetup();
+    if (!session.namedAccountId) {
+      $('backup-name-status').textContent = 'Name not confirmed. Try another available name or retry.';
+      return;
+    }
+    notice('Named account verified. Create the restricted PUBLIC phrase in step 2 on this page.');
+  } catch (error) {
+    syncSetup();
+    $('backup-name-status').textContent = 'Registration not completed: ' + (error?.message || 'Retry with a different name.');
+    notice($('backup-name-status').textContent, true);
+  }
+}
 async function finishCreate() {
-  if (!pending || !$('backup-confirm').checked) throw new Error('Confirm that you saved your words offline.');
+  if (!pending || !$('backup-confirm').checked) throw new Error('Back up your PRIVATE owner phrase before continuing.');
   const saved = await encryptWallet({
     accountId: pending.accountId, secretKey: pending.secretKey, publicKey: pending.publicKey
   }, pending.password);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-  const next = { accountId: pending.accountId, secretKey: pending.secretKey, publicKey: pending.publicKey, namedAccountId: null, permission: null, active: false };
+  session = {
+    accountId: pending.accountId, secretKey: pending.secretKey, publicKey: pending.publicKey,
+    namedAccountId: null, permission: null, active: false
+  };
+  pending.seedPhrase = '';
   pending = null;
   $('seed-words').replaceChildren();
+  $('seed-words').hidden = true;
+  $('toggle-owner-words').hidden = true;
+  $('owner-words-hidden').textContent = 'PRIVATE owner words securely cleared from the screen. Keep your offline backup safe.';
+  $('owner-words-hidden').hidden = false;
   $('create-password').value = '';
-  await enterDashboard(next);
-  $('name-input').value = $('initial-name').value.trim();
-  try {
-    await createNamedAccount();
-  } catch (error) {
-    notice('Recovery phrase and encrypted wallet saved. ' +
-      'The .testnet name is not confirmed yet: ' + (error?.message || 'Retry name creation below.'), true);
-  }
+  $('backup-confirm').checked = false;
+  $('finish-create').hidden = true;
+  $('backup-retry-name').hidden = false;
+  $('backup-open-wallet').hidden = false;
+  await registerNameOnSetup();
+}
+function togglePrivateWords() {
+  if (!pending?.seedPhrase) return;
+  const hidden = !$('seed-words').hidden;
+  $('seed-words').hidden = hidden;
+  $('owner-words-hidden').hidden = !hidden;
+  if (hidden) $('seed-words').replaceChildren();
+  else drawWords(pending.seedPhrase, $('seed-words'));
+  $('toggle-owner-words').textContent = hidden ? 'Reveal private words' : 'Hide private words';
+}
+async function createRestrictedOnSetup() {
+  await generatePublicChallengePhrase();
+  if (!publicChallengePhrase) return;
+  drawWords(publicChallengePhrase, $('backup-public-words'));
+  $('backup-public-ready').hidden = false;
+  $('backup-public-pending').hidden = true;
+  $('backup-generate-public').hidden = true;
+  $('backup-public-status').textContent = 'Restricted key verified on NEAR Testnet for ' +
+    session.namedAccountId + '. Only these SECOND words may be shared with testers.';
+  notice('Restricted challenge phrase is verified. Both roles are now on the setup page.');
 }
 
 async function importWallet() {
@@ -618,6 +689,7 @@ function lockWallet() {
   pending = null;
   $('import-secret').value = '';
   $('seed-words').replaceChildren();
+  $('backup-public-words').replaceChildren();
   clearPublicPhrase();
   show(localStorage.getItem(STORAGE_KEY) ? 'unlock-view' : 'start-view');
 }
@@ -626,6 +698,7 @@ on('choose-create', () => show('create-view'));
 on('choose-import', () => show('import-view'));
 on('choose-watch', () => show('watch-view'));
 document.querySelectorAll('[data-back]').forEach(el => el.addEventListener('click', () => {
+  if (pending?.seedPhrase) pending.seedPhrase = '';
   pending = null;
   $('seed-words').replaceChildren();
   show('start-view');
@@ -633,6 +706,21 @@ document.querySelectorAll('[data-back]').forEach(el => el.addEventListener('clic
 on('generate-seed', generateNewWallet);
 $('backup-confirm').addEventListener('change', () => { $('finish-create').disabled = !$('backup-confirm').checked; });
 on('finish-create', finishCreate);
+on('toggle-owner-words', togglePrivateWords);
+on('backup-retry-name', registerNameOnSetup);
+on('backup-generate-public', createRestrictedOnSetup);
+on('backup-copy-public', async () => {
+  if (!publicChallengePhrase || $('backup-public-ready').hidden) throw new Error('No verified restricted phrase to copy.');
+  await navigator.clipboard.writeText(publicChallengePhrase);
+  notice('Copied the PUBLIC RESTRICTED challenge phrase. Never share the private owner phrase.');
+});
+on('backup-open-wallet', async () => {
+  if (!session) throw new Error('Complete the private owner backup first.');
+  $('seed-words').replaceChildren();
+  $('backup-public-words').replaceChildren();
+  show('dashboard-view');
+  await loadDashboard();
+});
 on('do-import', importWallet);
 on('do-watch', watchAccount);
 on('do-unlock', unlockWallet);
@@ -669,8 +757,10 @@ on('copy-account', async () => {
   notice('Account ID copied to clipboard.');
 });
 on('copy-new-address', async () => {
-  if (!pending) return;
-  await navigator.clipboard.writeText(pending.accountId);
-  notice('Implicit account address copied.');
+  const accountId = pending?.accountId ||
+    (session?.secretKey && hexPublicKey(KeyPair.fromString(session.secretKey).getPublicKey()));
+  if (!accountId) return;
+  await navigator.clipboard.writeText(accountId);
+  notice('Long implicit account address copied.');
 });
 show(localStorage.getItem(STORAGE_KEY) ? 'unlock-view' : 'start-view');

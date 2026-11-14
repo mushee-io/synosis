@@ -39,6 +39,9 @@
         <section id="create-view" class="panel narrow" hidden>
           <div class="panel-top"><button class="back" data-back>← Back</button><span class="chip">1 / 2</span></div>
           <h2>Make your new wallet</h2><p class="muted">Your recovery phrase is created in your browser. Choose a password to encrypt the local copy of your key.</p>
+          <label for="initial-name">Choose a .testnet name</label>
+          <div class="name-form"><div class="name-field"><input id="initial-name" placeholder="meteoo" autocomplete="off" spellcheck="false" maxlength="56"></div><span class="name-suffix">.testnet</span></div>
+          <p class="micro">The name is registered after you back up your recovery phrase. If the testnet sponsor is unavailable, your generated wallet remains saved and you can retry.</p>
           <label for="create-password">Local password (at least 10 characters)</label>
           <input id="create-password" type="password" autocomplete="new-password" placeholder="Create a strong password">
           <button id="generate-seed" class="primary">Generate recovery phrase</button>
@@ -48,9 +51,9 @@
           <div class="panel-top"><span class="eyebrow">BACK UP YOUR WALLET</span><span class="chip">2 / 2</span></div>
           <h2>Write down these 12 words</h2><p class="muted">Keep them in order, offline. Anyone who sees them can control this wallet. Synosis will not show this phrase again after you confirm.</p>
           <div id="seed-words" class="words"></div>
-          <label>New testnet address</label><div class="address-line"><code id="new-address"></code><button id="copy-new-address" class="tiny">Copy</button></div>
+          <label>Long key-derived wallet address</label><div class="address-line"><code id="new-address"></code><button id="copy-new-address" class="tiny">Copy</button></div>
           <label class="check"><input type="checkbox" id="backup-confirm"> I've saved the recovery phrase offline, in order.</label>
-          <button id="finish-create" class="primary" disabled>Save encrypted wallet & continue</button>
+          <button id="finish-create" class="primary" disabled>Save wallet & register .testnet name</button>
         </section>
 
         <section id="import-view" class="panel narrow" hidden>
@@ -99,6 +102,18 @@
               <button id="switch-account" class="secondary">Switch between named and long addresses</button>
               <p class="micro">Both addresses use the same backed-up key but they are separate NEAR accounts. The balance above belongs only to the currently selected address.</p>
             </div>
+          </div>
+          <div id="challenge-panel" class="panel challenge-panel" hidden>
+            <div class="name-head"><div><div class="eyebrow">PUBLIC RECOVERY PHRASE CHALLENGE</div><h3>Give challengers a restricted recovery phrase</h3></div><span class="chip">TESTNET ONLY</span></div>
+            <p class="muted">Your private 12-word owner phrase can withdraw NEAR and must NEVER be shared. This creates a second 12-word phrase tied to the same named NEAR account, but its on-chain key is restricted to function calls and cannot send native NEAR. People can import it and see the account balance.</p>
+            <button id="make-public-phrase" class="secondary">Generate restricted public challenge phrase</button>
+            <div id="public-phrase-wrap" class="public-phrase-wrap" hidden>
+              <div class="eyebrow">SHARE THIS RESTRICTED PHRASE ONLY</div>
+              <div id="public-phrase" class="words"></div>
+              <button id="copy-public-phrase" class="primary">Copy restricted phrase</button>
+              <p id="public-challenge-details" class="micro"></p>
+            </div>
+            <p class="micro">Restricted-key demo is NOT security against a leaked full-access owner phrase. No funds or keys are deposited with Synosis servers.</p>
           </div>
           <div class="dashboard-grid bottom">
             <div class="panel"><h3>Send testnet NEAR</h3><p class="muted">Transfers are signed locally and broadcast to the testnet network.</p>

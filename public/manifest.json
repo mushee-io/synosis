@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Synosis | NEAR Testnet Wallet",
+  "short_name": "Synosis",
+  "description": "NEAR testnet wallet and restricted-key withdrawal challenge.",
+  "version": "0.1.0",
+  "action": { "default_title": "Synosis", "default_popup": "popup.html" },
+  "permissions": ["storage"],
+  "host_permissions": ["https://rpc.testnet.near.org/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

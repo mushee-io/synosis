@@ -65,3 +65,19 @@ footer{padding:25px 5.5%;font-size:9px;letter-spacing:1.1px;border-top:1px solid
 .name-account-line code{overflow-wrap:anywhere;white-space:normal}
 #linked-name-view{margin-top:18px}
 @media(max-width:580px){.name-head{align-items:flex-start}.name-suffix{font-size:12px}.name-account-line{flex-wrap:wrap}}
+
+
+/* Owner/private versus public restricted challenge modes */
+.challenge-panel{margin-top:20px;background:linear-gradient(125deg,#122d20,#11231a)}
+.challenge-panel h3{margin-top:8px;margin-bottom:6px}
+.challenge-panel>.muted{max-width:880px}
+.public-phrase-wrap{padding:20px;margin:18px 0;background:#102a1c;border:1px solid #548560;border-radius:15px}
+.public-phrase-wrap .words{margin:14px 0}
+#role-explainer{border-top:1px solid #345440;padding-top:13px;margin-top:13px}
+.key-record{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #33523d}
+.key-record>div{min-width:0}
+.key-record strong{display:block;font-size:12px;color:#d0f5db;margin-bottom:7px}
+.key-record code{display:block;font-size:10px;color:#91b6a3;overflow-wrap:anywhere;word-break:break-all}
+.key-record .tiny{align-self:center}
+.public-key-list{max-width:850px;margin-top:15px}
+@media(max-width:580px){.key-record{align-items:flex-start;flex-direction:column}.key-record .tiny{align-self:flex-start}}

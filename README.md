@@ -1,154 +1,112 @@
 # SYNOSIS
-### The key is real. The authority is conditional.
 
-**A NEAR-native experiment in programmable wallet authority.**  
-**Own a key. Enter the account. See the balance. Try to move the funds. Discover what the blockchain actually permits.**
+### THE KEY IS REAL. THE AUTHORITY IS DIFFERENT.
 
-[![NEAR](https://img.shields.io/badge/NEAR-Testnet-111827?style=for-the-badge)](https://near.org/)
-[![Rust](https://img.shields.io/badge/Vault-Rust%20%2B%20WASM-111827?style=for-the-badge)](contracts/vault/)
-[![Linux](https://img.shields.io/badge/CI-Ubuntu%20Linux-111827?style=for-the-badge)](.github/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/Status-Experimental-8b5cf6?style=for-the-badge)](#proof-over-promises)
+**A new experiment in digital ownership — powered by NEAR, engineered with Linux-based infrastructure.**
 
-> **The experiment:** What if possessing a legitimate signing credential did *not* automatically mean possessing the authority to withdraw?
->
-> Synosis explores that question with **native NEAR access-key permissions**, client-side encryption, and an optional NEAR smart-contract vault. The restriction is a protocol rule, not a disabled button.
+What if you could hold a genuine wallet credential, open an account, see its NEAR balance, and still have **no permission to withdraw**?
 
-**Try the web beta:** [synosis-indol.vercel.app](https://synosis-indol.vercel.app/) · **Source:** [mushee-io/synosis](https://github.com/mushee-io/synosis)
+Not a simulation. Not a frozen button. A different model of access.
 
----
+**Welcome to Synosis.**
 
-## 01 / THE IDEA — ACCESS ≠ AUTHORITY
+[![NEAR](https://img.shields.io/badge/NEAR-Native%20Testnet-111827?style=for-the-badge)](https://near.org/)
+[![Linux](https://img.shields.io/badge/Linux-Engineered-111827?style=for-the-badge)](.github/workflows/ci.yml)
+[![Research](https://img.shields.io/badge/Status-Research%20Prototype-6d28d9?style=for-the-badge)](#research-status)
 
-Traditional wallet experiences often collapse identity, account visibility, and spending power into one mental model. Synosis deliberately separates them.
-
-The interface treats wallet ownership and challenge participation as distinct security roles:
-
-| Capability | Private owner credential | Restricted challenge credential |
-|---|---|---|
-| Inspect the same NEAR account and its balance | Yes | Yes |
-| Sign native NEAR transfers | **Yes**, with an authorised full-access key | **No** |
-| Manage account access keys | **Yes**, with full access | **No** |
-| Invoke arbitrary contract functions | Subject to account/contract rules | **No** — only allowlisted calls |
-| Authorise a vault withdrawal | Only if authorised by the vault's contract rules | **No** |
-
-One **NEAR account** can carry multiple credentials with different permissions. This is not a second wallet mirroring a balance, nor a fake watch-only overlay. A published *restricted recovery phrase* derives a real signing key, but **NEAR enforces its narrower permissions**. A plain **public key**, by contrast, cannot sign transactions at all.
-
-**The innovation is not hiding a balance. It's making authority verifiable.**
-
-## 02 / BUILT FROM FIRST PRINCIPLES
-
-**Local-first key generation.** Create a new 12-word recovery phrase and a 64-character implicit NEAR address in the browser. No seed-generation endpoint.
-
-**Encrypted ownership.** Keys are encrypted client-side using AES-GCM with a password-derived key (PBKDF2). The encrypted copy is stored locally; the user must preserve an offline recovery backup.
-
-**Human-readable accounts.** Register a `.testnet` account using its public key, then verify that the account and its full-access permission actually exist on NEAR Testnet. The named and implicit addresses are *separate on-chain accounts*, even if the same signing key controls both.
-
-**Permission-aware signing.** Synosis checks the key's access level against NEAR Testnet before enabling native transfers, and rechecks permission when sending.
-
-**Public challenge mode.** A second, independently generated 12-word phrase is registered as a restricted `FunctionCall` key, currently limited to a specific account and `ping` method. The restricted key can be imported by a participant, including into a compatible third-party wallet, but cannot authorise native `Transfer` actions.
-
-**Independent vault research.** A Rust smart-contract prototype exposes `ping`, deposits, an externally authorised `withdraw`, and owner rotation. That vault is an **additional, optional contract-level experiment**, not a property automatically guaranteed for every wallet created through the web flow.
-
-## 03 / THE WITHDRAWAL PARADOX
-
-```text
-                 NEAR TESTNET
-                      |
-             ONE NAMED ACCOUNT
-                /          \
-               /            \
-   FULL-ACCESS OWNER     RESTRICTED CHALLENGE
-         KEY                    KEY
-          |                      |
-    Native transfers       Balance visibility
-    Key management         Allowlisted call(s)
-          |                      |
-      ALLOWED          Native transfer DENIED
-                            by NEAR
-```
-
-The test is intentionally adversarial: don't trust Synosis's interface. Import the **restricted** phrase elsewhere, inspect the actual NEAR access key, and attempt a native transfer. The network — not the page — must decide the outcome.
-
-A failed transaction by itself proves little. A vague `near_rpc_error`, an unfunded account, and a timeout are **not** proof of permission enforcement. The decisive evidence is the chain's access-key state and a rejection specifically attributable to insufficient key authority, such as `RequiresFullAccess`.
-
-## 04 / NATIVE NEAR × LINUX DEVELOPMENT
-
-Synosis is engineered around **NEAR's own account and access-key model**, not an EVM compatibility layer. The web wallet communicates with NEAR Testnet via `near-api-js`. The separate vault prototype is written in **Rust** for compilation to **WebAssembly** and execution on NEAR.
-
-The project **builds and tests on Ubuntu Linux in GitHub Actions**. The user-facing wallet currently runs in the **browser**; a standalone native Linux desktop binary is **not** claimed or provided.
-
-```bash
-# Linux / macOS / compatible Node environment
-# Node.js 22 recommended for parity with CI
-npm install
-npm test
-npm run build
-npm run preview
-```
-
-For the Rust vault prototype:
-
-```bash
-rustup target add wasm32-unknown-unknown
-cargo test --manifest-path contracts/vault/Cargo.toml
-cargo build --manifest-path contracts/vault/Cargo.toml --target wasm32-unknown-unknown --release
-```
-
-The automated pipeline runs JavaScript checks and the Vite web build on Linux, alongside Rust vault tests and a WASM build. Source files and CI definitions are reproducible; **deployment and on-chain execution still require their own receipts**.
-
-## 05 / AN EXPERIMENT YOU CAN REPRODUCE
-
-1. Create a fresh, **testnet-only** Synosis wallet. Back up the **private owner** phrase offline.
-2. Register and verify a new `.testnet` account; fund **that exact named account** with testnet NEAR.
-3. Generate the **separate restricted challenge** phrase and confirm the derived public key has `FunctionCall` permission on-chain.
-4. Import only that restricted phrase in an isolated browser session or compatible external wallet.
-5. Read the account balance, attempt a minimal native transfer, and capture the exact NEAR rejection reason.
-6. Confirm that a genuinely authorised owner can still initiate a legitimate testnet transfer; for the optional contract vault, test its separate withdrawal-authorisation path independently.
-
-The web UI includes a **Test blocked withdrawal on NEAR** action for a restricted key. The CLI provides an independent probe:
-
-```bash
-# Configure these in your own secure terminal only; never commit or post them.
-export CHALLENGE_ACCOUNT_ID="your-vault.testnet"
-export PUBLIC_CHALLENGE_SEED_PHRASE="<restricted phrase only>"
-npm run challenge:probe
-```
-
-The optional vault deployment and owner-withdrawal instructions live in [scripts/README.md](scripts/README.md). Do **not** supply a full-access phrase to a public test, issue, screenshot, CI secret dump, or challenge participant.
-
-## 06 / THREAT MODEL: MAKE THE CLAIM TESTABLE
-
-**What the protocol is designed to stop:** a restricted function-call key being used to sign a native NEAR transfer, change account keys, or invoke methods outside its approved scope.
-
-**What it does *not* stop:** someone who obtains a genuine full-access owner secret. A full-access key can control its NEAR account, regardless of what the Synosis interface displays. The optional Rust vault's external-owner checks do not magically remove the rights of an existing full-access key on the vault's own account.
-
-**Other risks:** compromised browsers, malicious extensions, clipboard leaks, phishing, weak local passwords, RPC availability, smart-contract vulnerabilities, and operator mistakes. A restricted phrase is intentionally shareable for the experiment; an owner phrase is not.
-
-This is **not a claim of being “hackproof,” unbreakable, audited, or ready to secure real funds**. A serious security project must be precise about what it defends, what remains privileged, and how an outsider can falsify its claims.
-
-## 07 / PROOF OVER PROMISES
-
-| Component | Evidence in this repository | Status |
-|---|---|---|
-| Browser-based NEAR Testnet wallet | `index.html`, `src/web.js` | Implemented, requires end-to-end user testing |
-| Local encryption and permission checking | `src/crypto.js`, `src/permissions.js` | Implemented |
-| Restricted challenge-key generation | Web UI and `scripts/create-challenge.mjs` | Implemented; each key must be verified on-chain |
-| Rust/WASM vault design | `contracts/vault/` | Prototype; deployment must be separately verified |
-| Automated checks on Ubuntu Linux | `.github/workflows/ci.yml` | Configured; confirm latest run |
-| Live rejected-withdrawal proof | `scripts/probe-restricted.mjs` and web probe | **Pending a recorded, attributable on-chain result** |
-| Production audit and mainnet readiness | — | **Not complete; mainnet is disabled** |
-| Chrome extension distribution | `popup.html`, `src/main.js`, `public/manifest.json` | Earlier proof-of-concept; not current release |
-
-### What comes next
-
-Prove the denial against NEAR itself. Preserve testnet explorer evidence. Demonstrate an authorised control transaction. Review the threat model with external testers. Only then consider hardened extension packaging, audits, and broader networks.
+**[Explore Synosis](https://synosis-indol.vercel.app/)** · **[Developed by Mushee](https://mushee.xyz)**
 
 ---
 
-### SYNOSIS / THE RESEARCH POSITION
+## BEYOND THE WALLET
 
-**We are not trying to make a wallet *look* secure. We are investigating what it means for authority to be encoded, constrained, and challenged by the blockchain itself.**
+The traditional wallet is built on a simple assumption:
 
-*NEAR Testnet only · Experimental security research · No real funds · No “unhackable” claims.*
+> Whoever controls the key controls the assets.
 
-Built by **Mushee**.
+**Synosis questions the assumption.**
+
+We are exploring an architecture in which **access and authority are distinct**. A person may hold a valid, importable credential for a NEAR account while the network itself limits what that credential can do.
+
+The result is a new kind of interaction: a wallet that can be explored, inspected, and challenged without automatically granting spending power.
+
+**Seeing the funds is not the same as controlling the funds.**
+
+## THE ACCESS PARADOX
+
+**One account. Different levels of authority.**
+
+Synosis distinguishes between a private owner credential, which may authorise asset transfers, and a restricted challenge credential, which is limited to specifically permitted actions.
+
+Both can refer to the *same* NEAR account. This does **not** mean that users need two separate wallets.
+
+- **Private ownership:** Full-access credentials retain control over authorised transfers and account management.
+- **Public challenge:** A separate restricted credential allows account inspection and only its permitted interactions, but cannot authorise native NEAR transfers.
+- **Network-level enforcement:** The restriction comes from NEAR's permission system rather than relying solely on Synosis's interface.
+
+The research question is simple:
+
+### Can the network enforce the boundary even when a participant takes the restricted credential into another compatible wallet?
+
+That is what the Synosis public challenge is designed to test.
+
+## NEAR-NATIVE. LINUX-ENGINEERED.
+
+Synosis explores programmable account authority **directly on NEAR**, with a web-first experience and a separate experimental smart-contract component.
+
+Its engineering environment uses **Linux-based automated testing**, including Ubuntu runners for wallet checks and Rust/WebAssembly vault builds. The prototype combines browser-based interaction with NEAR-native account permissions and contract research.
+
+**The experience is currently delivered through the web, not as a standalone Linux desktop app.** Linux is part of the project's build-and-validation technology, not a requirement for participants to install an operating system.
+
+This is deliberate: make the experiment accessible while testing its security assumptions against the underlying network.
+
+## THE PUBLIC CHALLENGE
+
+**You have access. Do you have authority?**
+
+The challenge invites participants to investigate the difference between possessing a credential and possessing permission to move assets.
+
+A participant can be given a **restricted challenge recovery phrase**, import it in a compatible NEAR wallet, and inspect the associated account. The interesting moment comes when they try to authorise a native NEAR withdrawal — an action that the restricted key is not permitted to perform.
+
+Synosis is designed to make the security boundary **observable and independently testable**.
+
+A generic wallet error is not sufficient evidence of protection. An actual security claim needs the relevant on-chain key permissions and a specific, attributable transaction rejection.
+
+**Do not share a private owner recovery phrase.** The public challenge uses a different, deliberately restricted credential.
+
+## RESEARCH WITHOUT THE THEATER
+
+We are not building the appearance of a secure wallet.
+
+We are testing a deeper proposition: that permissions can be separated from possession and enforced by a blockchain rather than by interface design alone.
+
+The Synosis prototype currently explores:
+
+- **Permission-aware wallet access** on NEAR Testnet.
+- **Restricted challenge credentials** that can be independently examined.
+- **Local-first encrypted key handling** for wallet ownership.
+- **NEAR smart-contract vault research** with separately authorised withdrawal logic.
+- **Linux-based automated builds and testing** for the application and contract prototype.
+- **Cross-wallet adversarial testing** to distinguish interface restrictions from network enforcement.
+
+This is a research direction, not a claim to have invented a new cryptographic primitive or to have made wallets invulnerable.
+
+## RESEARCH STATUS
+
+**Synosis is an experimental NEAR Testnet prototype.**
+
+The web wallet and restricted-access flows are implemented. A Rust/WebAssembly vault prototype and Linux CI workflows exist in this repository. Independent live withdrawal-rejection evidence, external security review, and production readiness remain separate validation steps.
+
+The restricted challenge credential **does not** make an exposed full-access owner phrase safe. Anyone with a legitimate full-access key may still exercise that key's permissions. Synosis must never be described as hackproof, fully audited, or suitable for protecting real funds at this stage.
+
+**No real funds. No mainnet guarantees. Proof over promises.**
+
+For researchers who want the implementation, the [source code](https://github.com/mushee-io/synosis), [challenge documentation](scripts/README.md), and [automated workflows](.github/workflows/ci.yml) remain available.
+
+---
+
+### SYNOSIS
+
+**Access is not ownership. Possession is not permission.**
+
+*A NEAR-native security experiment, built by Mushee.*

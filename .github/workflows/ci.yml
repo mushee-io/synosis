@@ -26,6 +26,7 @@ jobs:
           node --check scripts/deploy-vault.mjs
           node --check scripts/create-challenge.mjs
           node --check scripts/probe-restricted.mjs
+          node --check scripts/owner-withdraw.mjs
       - name: Build Chrome extension
         run: npm run build
       - name: Archive extension (unpacked)

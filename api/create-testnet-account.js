@@ -1,5 +1,7 @@
 // Testnet-only sponsor proxy. No seeds, passwords or private keys are accepted.
 // The endpoint sends only a requested name and an ed25519 PUBLIC key to NEAR's helper.
+import { timingSafeEqual } from 'node:crypto';
+
 const HELPER = 'https://helper.nearprotocol.com/account';
 const NAME = /^[a-z0-9]+(?:[-_][a-z0-9]+)*\.testnet$/;
 const PUBLIC_KEY = /^ed25519:[1-9A-HJ-NP-Za-km-z]{32,60}$/;
@@ -19,6 +21,20 @@ export default async function handler(req, res) {
       (origin.protocol === 'http:' && /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host))));
   } catch { /* Cross-origin or scripted requests are not trusted. */ }
   if (!allowedOrigin) return res.status(403).json({ error: 'Same-origin browser request required.' });
+  // Official account sponsorship is an operator-only service. A public GitHub
+  // fork or copied web UI never inherits this server-side credential.
+  // Fail CLOSED until the Vercel project has a strong operator token configured.
+  const configured = process.env.SYNOSIS_REGISTRATION_TOKEN || '';
+  if (Buffer.byteLength(configured, 'utf8') < 32) {
+    return res.status(503).json({ error: 'Official account registration is not configured. Contact a Synosis operator.' });
+  }
+  const supplied = req.headers['x-synosis-operator-token'];
+  const expectedBytes = Buffer.from(configured, 'utf8');
+  const suppliedBytes = Buffer.from(typeof supplied === 'string' ? supplied : '', 'utf8');
+  if (suppliedBytes.length !== expectedBytes.length ||
+      !timingSafeEqual(expectedBytes, suppliedBytes)) {
+    return res.status(401).json({ error: 'Synosis operator approval is required for official account registration.' });
+  }
   const { newAccountId, newAccountPublicKey } = req.body || {};
   if (typeof newAccountId !== 'string' || newAccountId.length < 10 ||
       newAccountId.length > 64 || !NAME.test(newAccountId) ||

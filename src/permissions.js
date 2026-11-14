@@ -3,6 +3,25 @@ export function isFullAccess(permission) {
     (typeof permission === 'object' && permission !== null && Object.hasOwn(permission, 'GasKeyFullAccess'));
 }
 
+/**
+ * Administrative actions must always require a full-access key, not merely
+ * a wallet session, a UI role or possession of a restricted seed phrase.
+ * The caller must supply permissions freshly queried from the NEAR network.
+ */
+export function assertOwnerKeyPermission(permission) {
+  if (!isFullAccess(permission)) {
+    throw new Error('Blocked by NEAR permissions: only a verified full-access owner key can manage this account.');
+  }
+}
+
+export function isExactChallengePermission(permission, accountId) {
+  const scoped = permission?.FunctionCall;
+  return !!scoped && scoped.receiver_id === accountId &&
+    Array.isArray(scoped.method_names) &&
+    scoped.method_names.length === 1 &&
+    scoped.method_names[0] === 'ping';
+}
+
 export function describePermission(permission) {
   if (isFullAccess(permission)) return 'Full access · transfers permitted';
   const restricted = permission?.FunctionCall || permission?.GasKeyFunctionCall;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isFullAccess, describePermission, formatYocto, assertTransfer } from '../src/permissions.js';
+import { isFullAccess, describePermission, formatYocto, assertTransfer, assertOwnerKeyPermission, isExactChallengePermission } from '../src/permissions.js';
 
 const restricted = {
   FunctionCall: {
@@ -41,4 +41,23 @@ test('Balances are formatted without floating point precision loss', () => {
   assert.equal(formatYocto('1234567890000000000000000'), '1.234567');
   assert.equal(formatYocto('0'), '0');
   assert.equal(formatYocto('123'), '0');
+});
+
+test('only verified full-access permission may authorize administrative wallet actions', () => {
+  assert.doesNotThrow(() => assertOwnerKeyPermission('FullAccess'));
+  assert.throws(() => assertOwnerKeyPermission(restricted), /only a verified full-access owner key/);
+  assert.throws(() => assertOwnerKeyPermission(null), /Blocked by NEAR permissions/);
+  assert.throws(() => assertOwnerKeyPermission({ FullAccess: {} }), /Blocked by NEAR permissions/);
+});
+
+test('public challenge verification requires exact named-account ping scope', () => {
+  assert.equal(isExactChallengePermission(restricted, 'vault.testnet'), true);
+  assert.equal(isExactChallengePermission(restricted, 'other.testnet'), false);
+  assert.equal(isExactChallengePermission('FullAccess', 'vault.testnet'), false);
+  assert.equal(isExactChallengePermission({
+    FunctionCall: { receiver_id: 'vault.testnet', method_names: ['ping', 'withdraw'] }
+  }, 'vault.testnet'), false);
+  assert.equal(isExactChallengePermission({
+    FunctionCall: { receiver_id: 'vault.testnet', method_names: [] }
+  }, 'vault.testnet'), false);
 });

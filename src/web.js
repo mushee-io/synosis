@@ -1,7 +1,7 @@
 import { Account, JsonRpcProvider, KeyPair, actions, nearToYocto } from 'near-api-js';
 import { generateSeedPhrase, parseSeedPhrase } from 'near-seed-phrase';
 import { encryptWallet, decryptWallet } from './crypto.js';
-import { assertTransfer, describePermission, formatYocto, isFullAccess } from './permissions.js';
+import { assertTransfer, assertOwnerKeyPermission, isExactChallengePermission, describePermission, formatYocto, isFullAccess } from './permissions.js';
 
 const RPC = 'https://rpc.testnet.near.org';
 const provider = new JsonRpcProvider({ url: RPC });
@@ -344,7 +344,7 @@ async function generatePublicChallengePhrase() {
   if (!confirm('Create a SECOND recovery phrase with restricted on-chain permissions? Never share your PRIVATE owner phrase.')) return;
   const target = session.namedAccountId;
   const ownerPermission = await permissionFor(target, session.publicKey);
-  if (!isFullAccess(ownerPermission)) throw new Error('Owner key is not full-access on this account.');
+  assertOwnerKeyPermission(ownerPermission);
   const restricted = generateSeedPhrase();
   const restrictedPublicKey = KeyPair.fromString(restricted.secretKey).getPublicKey();
   // A function-call key restricted to this account and this one method
@@ -356,9 +356,7 @@ async function generatePublicChallengePhrase() {
   });
   if (tx?.status?.Failure) throw new Error('Adding the restricted access key failed on NEAR Testnet.');
   const recorded = await permissionFor(target, restrictedPublicKey.toString());
-  if (isFullAccess(recorded) || !recorded?.FunctionCall ||
-      recorded.FunctionCall.receiver_id !== target ||
-      !recorded.FunctionCall.method_names?.includes('ping')) {
+  if (!isExactChallengePermission(recorded, target)) {
     throw new Error('Restricted-key permissions were not verified on chain. DO NOT share this phrase.');
   }
   publicChallengePhrase = restricted.seedPhrase;
@@ -379,6 +377,8 @@ async function refreshPublicKeys() {
     throw new Error('Only the verified private owner can manage account keys.');
   }
   const accountId = session.accountId;
+  // Do not trust cached UI role data for administrative actions.
+  assertOwnerKeyPermission(await permissionFor(accountId, session.publicKey));
   const keys = await rpc('query', {
     request_type: 'view_access_key_list', account_id: accountId, finality: 'final'
   });
@@ -423,6 +423,8 @@ async function revokePublicKey(publicKey) {
     throw new Error('Only the private owner can revoke a different restricted key.');
   }
   const accountId = session.accountId;
+  // A stale in-memory "owner" flag must never authorize account-key changes.
+  assertOwnerKeyPermission(await permissionFor(accountId, session.publicKey));
   const current = await permissionFor(accountId, publicKey);
   if (!current?.FunctionCall) throw new Error('Refusing to revoke a key that is not a function-call key.');
   if (!confirm('Revoke this public challenge key on ' + accountId + '? Anyone using its phrase will lose signing access.')) return;

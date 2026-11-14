@@ -257,8 +257,18 @@ async function createNamedAccount() {
     if (!isFullAccess(permission)) throw new Error('That .testnet name is already taken by another key.');
   } else {
     if (!confirm('Register ' + name + ' on NEAR Testnet using your existing PUBLIC key? This is a separate blockchain account, controlled by the same recovery phrase.')) return;
+    // Do not persist operator credentials in source, localStorage or the wallet backup.
+    // Only enter the approval token on the trusted official Synosis domain.
+    const operatorToken = window.prompt(
+      'Official .testnet registration requires a Mushee operator approval token. ' +
+      'Never enter a recovery phrase or NEAR private key here. ' +
+      'The token is used once and not saved in the browser.'
+    );
+    if (operatorToken === null) throw new Error('Account registration cancelled.');
+    if (!operatorToken.trim()) throw new Error('Operator approval token is required to register a new named account.');
     const response = await fetch('/api/create-testnet-account', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Synosis-Operator-Token': operatorToken },
       body: JSON.stringify({ newAccountId: name, newAccountPublicKey: session.publicKey })
     });
     const data = await response.json().catch(() => ({}));

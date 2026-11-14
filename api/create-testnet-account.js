@@ -1,6 +1,6 @@
 // Testnet-only sponsor proxy. No seeds, passwords or private keys are accepted.
 // The endpoint sends only a requested name and an ed25519 PUBLIC key to NEAR's helper.
-const HELPER = 'https://helper.testnet.near.org/account';
+const HELPER = 'https://helper.nearprotocol.com/account';
 const NAME = /^[a-z0-9]+(?:[-_][a-z0-9]+)*\.testnet$/;
 const PUBLIC_KEY = /^ed25519:[1-9A-HJ-NP-Za-km-z]{32,60}$/;
 

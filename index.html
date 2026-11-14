@@ -47,13 +47,37 @@
           <button id="generate-seed" class="primary">Generate recovery phrase</button>
           <div class="security-note">Use testnet tokens only. Do not reuse any recovery phrase from a real wallet.</div>
         </section>
-        <section id="backup-view" class="panel narrow" hidden>
-          <div class="panel-top"><span class="eyebrow">BACK UP YOUR WALLET</span><span class="chip">2 / 2</span></div>
-          <h2>Write down these 12 words</h2><p class="muted">Keep them in order, offline. Anyone who sees them can control this wallet. Synosis will not show this phrase again after you confirm.</p>
-          <div id="seed-words" class="words"></div>
-          <label>Long key-derived wallet address</label><div class="address-line"><code id="new-address"></code><button id="copy-new-address" class="tiny">Copy</button></div>
-          <label class="check"><input type="checkbox" id="backup-confirm"> I've saved the recovery phrase offline, in order.</label>
-          <button id="finish-create" class="primary" disabled>Save wallet & register .testnet name</button>
+        <section id="backup-view" class="panel setup-panel" hidden>
+          <div class="panel-top"><span class="eyebrow">SECURE WALLET SETUP</span><span class="chip">2 / 2</span></div>
+          <h2>Two recovery phrases, one named account</h2>
+          <p class="muted">First back up your private owner phrase. Once your .testnet name is registered, create a separate restricted challenge phrase. Both keys can access the same NEAR account, but only the private owner can transfer NEAR.</p>
+          <div class="setup-duo">
+            <div class="setup-step owner-step">
+              <div class="setup-title"><span class="setup-number">01</span><div><strong>Private Owner — full access</strong><p>NEVER share this recovery phrase. It controls withdrawals.</p></div></div>
+              <button id="toggle-owner-words" class="tiny" type="button">Hide private words</button>
+              <div id="seed-words" class="words"></div>
+              <p id="owner-words-hidden" class="micro" hidden>Private phrase hidden on screen. Your offline backup is required to recover this wallet.</p>
+              <label>Long key-derived wallet address</label><div class="address-line"><code id="new-address"></code><button id="copy-new-address" class="tiny">Copy</button></div>
+              <label class="check"><input type="checkbox" id="backup-confirm"> I've written down my PRIVATE owner phrase offline.</label>
+              <button id="finish-create" class="primary" disabled>Save owner key & register .testnet name</button>
+              <button id="backup-retry-name" class="secondary" hidden>Retry .testnet registration</button>
+              <p id="backup-name-status" class="micro">The named account must be registered before its restricted challenge key can be added.</p>
+            </div>
+            <div class="setup-step public-step">
+              <div class="setup-title"><span class="setup-number">02</span><div><strong>Public Challenge — restricted access</strong><p>A DIFFERENT 12-word phrase. Share only this one after on-chain verification.</p></div></div>
+              <div id="backup-public-pending" class="security-note">Your public challenge phrase will appear here once the .testnet account is registered and NEAR confirms the restricted access key.</div>
+              <button id="backup-generate-public" class="primary" hidden>Generate & verify restricted phrase</button>
+              <div id="backup-public-ready" hidden>
+                <div class="eyebrow">RESTRICTED PHRASE — FOR TESTERS ONLY</div>
+                <div id="backup-public-words" class="words"></div>
+                <button id="backup-copy-public" class="secondary">Copy restricted phrase</button>
+                <p id="backup-public-status" class="micro"></p>
+              </div>
+              <div class="security-note">A public key is not a seed phrase. This generates a second secret phrase whose key has <strong>restricted</strong> on-chain permissions; it cannot send native NEAR.</div>
+            </div>
+          </div>
+          <button id="backup-open-wallet" class="secondary" hidden>Open wallet dashboard</button>
+          <p class="micro">Do not share screenshots showing private owner words. Do not publish the full-access phrase, even for a testnet challenge.</p>
         </section>
 
         <section id="import-view" class="panel narrow" hidden>

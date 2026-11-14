@@ -11,6 +11,7 @@ const $ = id => document.getElementById(id);
 const viewIds = ['start-view', 'create-view', 'backup-view', 'import-view', 'watch-view', 'unlock-view', 'dashboard-view'];
 let session = null;
 let pending = null;
+let publicChallengePhrase = null;
 let busy = false;
 
 function notice(message, error = false) {
@@ -135,6 +136,7 @@ async function loadDashboard() {
   }
   $('do-send').disabled = !snapshot.secretKey || !snapshot.active || !isFullAccess(snapshot.permission);
   renderNamedPanel();
+  renderChallengePanel();
 }
 
 async function enterDashboard(nextSession) {
@@ -168,10 +170,10 @@ function renderNamedPanel() {
     implicitId = hexPublicKey(KeyPair.fromString(session.secretKey).getPublicKey());
   }
   const canCreate = hasSigningKey &&
-    (session.accountId === implicitId || !!session.namedAccountId || isFullAccess(session.permission));
+    (session.accountId === implicitId || isFullAccess(session.permission));
   $('name-panel').hidden = !canCreate;
   if (!canCreate) return;
-  const linked = !!session.namedAccountId;
+  const linked = !!session.namedAccountId && (session.accountId === implicitId || isFullAccess(session.permission));
   $('linked-name-view').hidden = !linked;
   $('linked-name').textContent = session.namedAccountId || '';
   $('linked-implicit').textContent = implicitId;
@@ -286,8 +288,77 @@ async function switchAccount() {
   notice('Switched to ' + session.accountId + '. Balance and send permissions now refer to this account.');
 }
 
+function clearPublicPhrase() {
+  publicChallengePhrase = null;
+  $('public-phrase').replaceChildren();
+  $('public-phrase-wrap').hidden = true;
+}
+
+function renderChallengePanel() {
+  const canPublish = !!session?.secretKey && !!session.namedAccountId &&
+    session.accountId === session.namedAccountId &&
+    session.active && isFullAccess(session.permission);
+  $('challenge-panel').hidden = !canPublish;
+  if (!canPublish) clearPublicPhrase();
+}
+
+function drawWords(words, element) {
+  element.replaceChildren();
+  words.split(/\\s+/).forEach((word, index) => {
+    const cell = document.createElement('div');
+    const number = document.createElement('span');
+    const label = document.createElement('strong');
+    number.textContent = String(index + 1).padStart(2, '0');
+    label.textContent = word;
+    cell.append(number, label);
+    element.append(cell);
+  });
+}
+
+async function generatePublicChallengePhrase() {
+  if (!session?.secretKey || !session.namedAccountId ||
+      session.accountId !== session.namedAccountId || !session.active ||
+      !isFullAccess(session.permission)) {
+    throw new Error('Unlock the named .testnet account with its PRIVATE owner phrase first.');
+  }
+  if (publicChallengePhrase) {
+    throw new Error('You already created a restricted phrase this session. Copy it first.');
+  }
+  if (!confirm('Create a SECOND recovery phrase with restricted on-chain permissions? Never share your PRIVATE owner phrase.')) return;
+  const target = session.namedAccountId;
+  const ownerPermission = await permissionFor(target, session.publicKey);
+  if (!isFullAccess(ownerPermission)) throw new Error('Owner key is not full-access on this account.');
+  const restricted = generateSeedPhrase();
+  const restrictedPublicKey = KeyPair.fromString(restricted.secretKey).getPublicKey();
+  // A function-call key restricted to this account and this one method
+  // can never authorise native transfer actions, including in another client.
+  const tx = await new Account(target, provider, session.secretKey).signAndSendTransaction({
+    receiverId: target,
+    actions: [actions.addFunctionCallAccessKey(restrictedPublicKey, target, ['ping'], nearToYocto('0.05'))],
+    waitUntil: 'FINAL'
+  });
+  if (tx?.status?.Failure) throw new Error('Adding the restricted access key failed on NEAR Testnet.');
+  const recorded = await permissionFor(target, restrictedPublicKey.toString());
+  if (isFullAccess(recorded) || !recorded?.FunctionCall ||
+      recorded.FunctionCall.receiver_id !== target ||
+      !recorded.FunctionCall.method_names?.includes('ping')) {
+    throw new Error('Restricted-key permissions were not verified on chain. DO NOT share this phrase.');
+  }
+  publicChallengePhrase = restricted.seedPhrase;
+  drawWords(publicChallengePhrase, $('public-phrase'));
+  $('public-phrase-wrap').hidden = false;
+  $('public-challenge-details').textContent = 'Account: ' + target +
+    '. Public key: ' + restrictedPublicKey.toString() +
+    '. This phrase only authorises a restricted function call, not native NEAR transfers. ' +
+    'The named account does not need to implement ping for the transfer restriction to work. ' +
+    'The private owner recovery phrase must remain secret.';
+  notice('Restricted SECOND recovery phrase is now verified on NEAR Testnet. Only this displayed phrase may be shared for the challenge.');
+}
+
 async function generateNewWallet() {
   if (!window.isSecureContext || !crypto?.subtle) throw new Error('A secure HTTPS context is required to generate keys.');
+  // Validate the requested named account before generating a new recovery phrase.
+  normalizeTestnetName($('initial-name').value);
   const password = $('create-password').value;
   if (password.length < 10) throw new Error('Choose an unlock password of at least 10 characters.');
   const generated = generateSeedPhrase();
@@ -295,16 +366,7 @@ async function generateNewWallet() {
   const kp = KeyPair.fromString(generated.secretKey);
   const accountId = hexPublicKey(kp.getPublicKey());
   pending = { accountId, seedPhrase: generated.seedPhrase, secretKey: generated.secretKey, publicKey: kp.getPublicKey().toString(), password };
-  $('seed-words').replaceChildren();
-  generated.seedPhrase.split(' ').forEach((word, index) => {
-    const cell = document.createElement('div');
-    const number = document.createElement('span');
-    const text = document.createElement('strong');
-    number.textContent = String(index + 1).padStart(2, '0');
-    text.textContent = word;
-    cell.append(number, text);
-    $('seed-words').append(cell);
-  });
+  drawWords(generated.seedPhrase, $('seed-words'));
   $('new-address').textContent = accountId;
   $('backup-confirm').checked = false;
   show('backup-view');
@@ -322,7 +384,13 @@ async function finishCreate() {
   $('seed-words').replaceChildren();
   $('create-password').value = '';
   await enterDashboard(next);
-  notice('Wallet created and recovery phrase backed up. You can now create a .testnet name below without changing your recovery phrase.');
+  $('name-input').value = $('initial-name').value.trim();
+  try {
+    await createNamedAccount();
+  } catch (error) {
+    notice('Recovery phrase and encrypted wallet saved. ' +
+      'The .testnet name is not confirmed yet: ' + (error?.message || 'Retry name creation below.'), true);
+  }
 }
 
 async function importWallet() {
@@ -338,7 +406,7 @@ async function importWallet() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   $('import-secret').value = '';
   $('import-password').value = '';
-  await enterDashboard({ accountId, secretKey, publicKey, namedAccountId: accountId.endsWith('.testnet') ? accountId : null, permission, active: true });
+  await enterDashboard({ accountId, secretKey, publicKey, namedAccountId: accountId.endsWith('.testnet') && isFullAccess(permission) ? accountId : null, permission, active: true });
   notice('Testnet key imported. Encrypted key material stays in this browser.');
 }
 
@@ -397,6 +465,7 @@ function forgetWallet() {
   localStorage.removeItem(NAME_KEY);
   session = null;
   pending = null;
+  clearPublicPhrase();
   $('unlock-password').value = '';
   show('start-view');
   notice('Local encrypted wallet was erased from this browser.');
@@ -407,6 +476,7 @@ function lockWallet() {
   pending = null;
   $('import-secret').value = '';
   $('seed-words').replaceChildren();
+  clearPublicPhrase();
   show(localStorage.getItem(STORAGE_KEY) ? 'unlock-view' : 'start-view');
 }
 
@@ -430,6 +500,12 @@ on('do-check', inspectChallenge);
 on('check-name', checkNamedAvailability);
 on('create-name', createNamedAccount);
 on('switch-account', switchAccount);
+on('make-public-phrase', generatePublicChallengePhrase);
+on('copy-public-phrase', async () => {
+  if (!publicChallengePhrase) throw new Error('No restricted public phrase available to copy.');
+  await navigator.clipboard.writeText(publicChallengePhrase);
+  notice('The restricted public challenge phrase was copied. Keep the owner recovery phrase PRIVATE.');
+});
 on('copy-named', async () => {
   if (!session?.namedAccountId) return;
   await navigator.clipboard.writeText(session.namedAccountId);

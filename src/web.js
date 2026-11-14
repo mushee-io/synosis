@@ -152,7 +152,7 @@ function hexPublicKey(publicKey) {
 }
 
 function normalizeTestnetName(value) {
-  const label = value.trim().toLowerCase().replace(/\\.testnet$/, '');
+  const label = value.trim().toLowerCase().replace(/\.testnet$/, '');
   // Restrict to one top-level .testnet name; nested subaccounts are separate.
   if (label.length < 2 || label.length > 56 ||
       !/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(label)) {
@@ -195,7 +195,7 @@ async function restoreNamedAccount(loaded) {
   if (!saved || namedAccountId) return next;
   try {
     const link = JSON.parse(saved);
-    if (link.publicKey !== loaded.publicKey || !/^[a-z0-9]+(?:[-_][a-z0-9]+)*\\.testnet$/.test(link.accountId)) return next;
+    if (link.publicKey !== loaded.publicKey || !/^[a-z0-9]+(?:[-_][a-z0-9]+)*\.testnet$/.test(link.accountId)) return next;
     const permission = await permissionFor(link.accountId, loaded.publicKey);
     if (isFullAccess(permission)) {
       next.namedAccountId = link.accountId;

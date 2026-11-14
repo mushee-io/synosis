@@ -17,6 +17,23 @@ if (accountId === ownerId) throw new Error('Owner must be a different NEAR Testn
 if (!key?.startsWith('ed25519:')) throw new Error('Set CHALLENGE_ACCOUNT_PRIVATE_KEY in your local environment (NEVER COMMIT IT).');
 
 const provider = new JsonRpcProvider({ url: RPC });
+// Refuse to overwrite any existing contract or vault state.
+const response = await fetch(RPC, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0', id: 'synosis-preflight', method: 'query',
+    params: { request_type: 'view_account', account_id: accountId, finality: 'final' }
+  })
+});
+if (!response.ok) throw new Error('Testnet RPC unavailable; cannot safely deploy.');
+const preflight = await response.json();
+if (preflight.error || !preflight.result?.code_hash) {
+  throw new Error('Could not inspect current account code; refusing deployment.');
+}
+if (preflight.result.code_hash !== '11111111111111111111111111111111') {
+  throw new Error('This account already has deployed code. Refusing to overwrite it.');
+}
 const wasmPath = process.env.VAULT_WASM_PATH || 'contracts/vault/target/wasm32-unknown-unknown/release/synosis_guard_vault.wasm';
 const code = new Uint8Array(await readFile(wasmPath));
 if (!code.length) throw new Error('Vault WASM file is empty.');

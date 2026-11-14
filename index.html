@@ -130,7 +130,8 @@
             <div class="panel"><h3>Protected withdrawal challenge</h3><p class="muted">Inspect whether the current key has permission to transfer native NEAR. Restricted keys cannot, even from another wallet application.</p>
               <div class="challenge-divider"></div><div class="feature-line"><span>◈</span><div><strong>On-chain permissions</strong><small>Not just an interface restriction</small></div></div>
               <button id="do-check" class="secondary">Check withdrawal permissions</button>
-              <p class="micro">Checking permissions is not the same as successfully submitting a negative transaction test.</p>
+              <button id="do-live-denial-probe" class="secondary">Test blocked withdrawal on NEAR</button>
+              <p class="micro">Import the SECOND restricted challenge phrase first. This submits a 1 yoctoNEAR native transfer action to the same account and checks for NEAR's RequiresFullAccess rejection. Never use the private owner phrase for this proof.</p>
             </div>
           </div>
         </section>

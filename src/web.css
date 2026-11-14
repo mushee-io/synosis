@@ -48,3 +48,20 @@ input::placeholder,textarea::placeholder{color:#6b8575}textarea{resize:vertical}
 footer{padding:25px 5.5%;font-size:9px;letter-spacing:1.1px;border-top:1px solid #1b3527;color:#5e816a;text-align:center}
 @media(max-width:950px){.shell{grid-template-columns:1fr}.sidebar{display:none}.hero-glyph{font-size:95px}.tiles{grid-template-columns:1fr}.tile{min-height:170px}.dashboard-grid{grid-template-columns:1fr}.topbar{padding:0 5%}}
 @media(max-width:580px){main{padding:25px 16px 45px}.topbar{padding:0 16px;height:63px}.hero{padding:27px;min-height:220px}.hero-glyph{display:none}.hero h1{font-size:31px}.panel{padding:21px}.words{grid-template-columns:repeat(2,minmax(0,1fr))}.section-head{flex-wrap:wrap}.balance-card{padding:23px}.balance-bottom{flex-wrap:wrap}}
+
+
+/* Testnet name registration */
+.name-panel{margin-top:20px;background:linear-gradient(110deg,#122a1e,#10251b)}
+.name-head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.name-panel .eyebrow{color:#87edaf}
+.name-panel h3{margin:8px 0 6px}
+.name-form{display:flex;align-items:end;gap:0;max-width:520px;margin-top:13px}
+.name-field{flex:1;min-width:0}
+.name-field label{margin-top:6px}
+.name-field input{border-radius:11px 0 0 11px}
+.name-suffix{background:#21422d;border:1px solid #345945;border-left:0;border-radius:0 11px 11px 0;padding:13px 12px;font-size:13px;color:#9df0b6;white-space:nowrap}
+.name-panel .primary,.name-panel .secondary{max-width:520px}
+.name-account-line{max-width:600px;margin-top:12px}
+.name-account-line code{overflow-wrap:anywhere;white-space:normal}
+#linked-name-view{margin-top:18px}
+@media(max-width:580px){.name-head{align-items:flex-start}.name-suffix{font-size:12px}.name-account-line{flex-wrap:wrap}}

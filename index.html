@@ -60,7 +60,9 @@
               <label>Long key-derived wallet address</label><div class="address-line"><code id="new-address"></code><button id="copy-new-address" class="tiny">Copy</button></div>
               <label class="check"><input type="checkbox" id="backup-confirm"> I've written down my PRIVATE owner phrase offline.</label>
               <button id="finish-create" class="primary" disabled>Save owner key & register .testnet name</button>
-              <button id="backup-retry-name" class="secondary" hidden>Retry .testnet registration</button>
+              <label for="backup-name-input">Requested NEAR account name</label>
+              <div class="name-form"><div class="name-field"><input id="backup-name-input" placeholder="yourname" autocomplete="off" spellcheck="false" maxlength="56"></div><span class="name-suffix">.testnet</span></div>
+              <button id="backup-retry-name" class="secondary" hidden>Register / retry .testnet name</button>
               <p id="backup-name-status" class="micro">The named account must be registered before its restricted challenge key can be added.</p>
             </div>
             <div class="setup-step public-step">

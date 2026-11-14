@@ -1,0 +1,305 @@
+import { Account, JsonRpcProvider, KeyPair, actions, nearToYocto } from 'near-api-js';
+import { generateSeedPhrase, parseSeedPhrase } from 'near-seed-phrase';
+import { encryptWallet, decryptWallet } from './crypto.js';
+import { assertTransfer, describePermission, formatYocto, isFullAccess } from './permissions.js';
+
+const RPC = 'https://rpc.testnet.near.org';
+const provider = new JsonRpcProvider({ url: RPC });
+const STORAGE_KEY = 'synosis.near.testnet.encrypted.wallet.v1';
+const $ = id => document.getElementById(id);
+const viewIds = ['start-view', 'create-view', 'backup-view', 'import-view', 'watch-view', 'unlock-view', 'dashboard-view'];
+let session = null;
+let pending = null;
+let busy = false;
+
+function notice(message, error = false) {
+  const el = $('notice');
+  el.hidden = false;
+  el.classList.toggle('error', error);
+  el.textContent = message;
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function show(id) {
+  viewIds.forEach(view => { $(view).hidden = view !== id; });
+  $('notice').hidden = true;
+}
+
+function setBusy(value) {
+  busy = value;
+  document.querySelectorAll('button').forEach(button => { button.disabled = value; });
+  if (!value) {
+    $('finish-create').disabled = !$('backup-confirm').checked;
+    const allowed = !!session?.secretKey && isFullAccess(session.permission) && session.active;
+    $('do-send').disabled = !allowed;
+  }
+}
+
+async function task(fn) {
+  if (busy) return;
+  setBusy(true);
+  try { await fn(); }
+  catch (error) {
+    console.error('Synosis action failed:', error?.name || 'Error');
+    notice(error?.message || 'The request failed. Check your network and try again.', true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function on(id, fn) { $(id).addEventListener('click', () => task(fn)); }
+function validateId(value) {
+  const id = value.trim();
+  if (/^[a-f0-9]{64}$/.test(id)) return id;
+  if (/^[a-z0-9_-]+(?:\.[a-z0-9_-]+)*\.testnet$/.test(id) && id.length <= 64) return id;
+  throw new Error('Enter a .testnet account ID or a 64-character lowercase implicit address.');
+}
+
+function normalizeSecret(input) {
+  const text = input.trim();
+  if (text.startsWith('ed25519:')) return text;
+  const words = text.toLowerCase().replace(/\s+/g, ' ');
+  if (![12, 24].includes(words.split(' ').length)) {
+    throw new Error('Enter exactly 12 or 24 recovery words, or an ed25519 private key.');
+  }
+  return parseSeedPhrase(words).secretKey;
+}
+
+async function rpc(method, params) {
+  const response = await fetch(RPC, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 'synosis-web', method, params })
+  });
+  if (!response.ok) throw new Error('NEAR Testnet RPC failed (' + response.status + ').');
+  const payload = await response.json();
+  if (payload.error) {
+    const error = new Error(payload.error.cause?.name || payload.error.message || 'NEAR query failed.');
+    error.rpc = payload.error;
+    throw error;
+  }
+  return payload.result;
+}
+
+function accountMissing(error) {
+  const name = error?.rpc?.cause?.name || error?.rpc?.name || error?.message || '';
+  return /UNKNOWN_ACCOUNT|ACCOUNT_DOES_NOT_EXIST|does not exist|UnknownAccount/i.test(name);
+}
+
+async function accountInfo(id) {
+  try {
+    return await rpc('query', { request_type: 'view_account', account_id: id, finality: 'final' });
+  } catch (error) {
+    if (accountMissing(error)) return null;
+    throw error;
+  }
+}
+
+async function permissionFor(id, publicKey) {
+  const result = await rpc('query', {
+    request_type: 'view_access_key', account_id: id,
+    public_key: publicKey, finality: 'final'
+  });
+  if (!result?.permission) throw new Error('The imported key is not authorised on this account.');
+  return result.permission;
+}
+
+async function loadDashboard() {
+  if (!session) return;
+  const snapshot = session;
+  const account = await accountInfo(snapshot.accountId);
+  if (session !== snapshot) return;
+  snapshot.active = !!account;
+  snapshot.permission = null;
+  $('balance').textContent = account ? formatYocto(account.amount) : '0';
+  $('account-address').textContent = snapshot.accountId;
+  $('activation').textContent = account
+    ? 'Account confirmed on NEAR Testnet.'
+    : 'This account has not been activated. Fund the implicit address with testnet NEAR before using it.';
+  if (!snapshot.secretKey) {
+    $('key-type').textContent = 'Watch only';
+    $('permission-details').textContent = 'No signing key is stored for this session.';
+  } else if (!account) {
+    $('key-type').textContent = 'Awaiting activation';
+    $('permission-details').textContent = 'Wallet keys were created locally. An implicit account becomes active when funded from NEAR Testnet.';
+  } else {
+    try {
+      snapshot.permission = await permissionFor(snapshot.accountId, snapshot.publicKey);
+      $('key-type').textContent = isFullAccess(snapshot.permission) ? 'Full access' : 'Restricted key';
+      $('permission-details').textContent = describePermission(snapshot.permission);
+    } catch (error) {
+      $('key-type').textContent = 'Key not authorised';
+      $('permission-details').textContent = 'The key is not authorised by this account on NEAR Testnet. Sending is disabled.';
+      snapshot.permission = null;
+    }
+  }
+  $('do-send').disabled = !snapshot.secretKey || !snapshot.active || !isFullAccess(snapshot.permission);
+}
+
+async function enterDashboard(nextSession) {
+  session = nextSession;
+  show('dashboard-view');
+  await loadDashboard();
+}
+
+function hexPublicKey(publicKey) {
+  const data = publicKey?.data;
+  if (!(data instanceof Uint8Array) || data.length !== 32) {
+    throw new Error('Could not derive a 32-byte NEAR implicit account address.');
+  }
+  return Array.from(data, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function generateNewWallet() {
+  if (!window.isSecureContext || !crypto?.subtle) throw new Error('A secure HTTPS context is required to generate keys.');
+  const password = $('create-password').value;
+  if (password.length < 10) throw new Error('Choose an unlock password of at least 10 characters.');
+  const generated = generateSeedPhrase();
+  if (!generated?.seedPhrase || !generated?.secretKey) throw new Error('Secure phrase generation failed.');
+  const kp = KeyPair.fromString(generated.secretKey);
+  const accountId = hexPublicKey(kp.getPublicKey());
+  pending = { accountId, seedPhrase: generated.seedPhrase, secretKey: generated.secretKey, publicKey: kp.getPublicKey().toString(), password };
+  $('seed-words').replaceChildren();
+  generated.seedPhrase.split(' ').forEach((word, index) => {
+    const cell = document.createElement('div');
+    const number = document.createElement('span');
+    const text = document.createElement('strong');
+    number.textContent = String(index + 1).padStart(2, '0');
+    text.textContent = word;
+    cell.append(number, text);
+    $('seed-words').append(cell);
+  });
+  $('new-address').textContent = accountId;
+  $('backup-confirm').checked = false;
+  show('backup-view');
+  $('finish-create').disabled = true;
+}
+
+async function finishCreate() {
+  if (!pending || !$('backup-confirm').checked) throw new Error('Confirm that you saved your words offline.');
+  const saved = await encryptWallet({
+    accountId: pending.accountId, secretKey: pending.secretKey, publicKey: pending.publicKey
+  }, pending.password);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  const next = { accountId: pending.accountId, secretKey: pending.secretKey, publicKey: pending.publicKey, permission: null, active: false };
+  pending = null;
+  $('seed-words').replaceChildren();
+  $('create-password').value = '';
+  await enterDashboard(next);
+  notice('Wallet created and encrypted in this browser. Send testnet NEAR to its implicit address to activate it.');
+}
+
+async function importWallet() {
+  const accountId = validateId($('import-id').value);
+  const secretKey = normalizeSecret($('import-secret').value);
+  const password = $('import-password').value;
+  if (password.length < 10) throw new Error('Choose an unlock password of at least 10 characters.');
+  const publicKey = KeyPair.fromString(secretKey).getPublicKey().toString();
+  const account = await accountInfo(accountId);
+  if (!account) throw new Error('This account is not active on NEAR Testnet yet.');
+  const permission = await permissionFor(accountId, publicKey);
+  const saved = await encryptWallet({ accountId, secretKey, publicKey }, password);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+  $('import-secret').value = '';
+  $('import-password').value = '';
+  await enterDashboard({ accountId, secretKey, publicKey, permission, active: true });
+  notice('Testnet key imported. Encrypted key material stays in this browser.');
+}
+
+async function watchAccount() {
+  const accountId = validateId($('watch-id').value);
+  const account = await accountInfo(accountId);
+  if (!account) throw new Error('This account does not exist on NEAR Testnet.');
+  await enterDashboard({ accountId, secretKey: null, publicKey: null, permission: null, active: true });
+}
+
+async function unlockWallet() {
+  const encrypted = localStorage.getItem(STORAGE_KEY);
+  if (!encrypted) throw new Error('No saved wallet exists in this browser.');
+  const loaded = await decryptWallet(JSON.parse(encrypted), $('unlock-password').value);
+  $('unlock-password').value = '';
+  const key = KeyPair.fromString(loaded.secretKey).getPublicKey().toString();
+  if (key !== loaded.publicKey) throw new Error('Stored signing key does not match the saved public key.');
+  await enterDashboard({ ...loaded, permission: null, active: false });
+  notice('Wallet unlocked on this device.');
+}
+
+async function send() {
+  if (!session?.secretKey || !session.active) throw new Error('This account cannot send yet.');
+  const to = validateId($('send-to').value);
+  const value = $('send-amount').value.trim();
+  const permission = await permissionFor(session.accountId, session.publicKey);
+  assertTransfer(value, to, permission);
+  if (!confirm('Send ' + value + ' testnet NEAR to ' + to + '? This is an on-chain action.')) return;
+  const result = await new Account(session.accountId, provider, session.secretKey).signAndSendTransaction({
+    receiverId: to, actions: [actions.transfer(nearToYocto(value))], waitUntil: 'FINAL'
+  });
+  if (result?.status?.Failure) throw new Error('The testnet transaction failed. Check the network explorer.');
+  $('send-amount').value = '';
+  await loadDashboard();
+  notice('Testnet transfer submitted. Transaction: ' + (result.transaction?.hash || 'check NEAR explorer'));
+}
+
+async function inspectChallenge() {
+  if (!session?.secretKey || !session.active) {
+    notice('Import and unlock an active account key to inspect its on-chain permissions.', true);
+    return;
+  }
+  const permission = await permissionFor(session.accountId, session.publicKey);
+  if (isFullAccess(permission)) {
+    notice('WARNING: This key has FULL ACCESS and can withdraw funds. Never publish this recovery phrase.', true);
+  } else if (permission?.FunctionCall) {
+    notice('Verified on NEAR Testnet: this is a restricted function-call key and cannot authorise native NEAR transfers. Live negative-transaction testing remains separate.');
+  } else {
+    notice('Unsupported or unknown key permissions. No claim of withdrawal protection can be made.', true);
+  }
+}
+
+function forgetWallet() {
+  if (!confirm('Erase the locally encrypted wallet from this browser? Ensure your recovery phrase is safely backed up first.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  session = null;
+  pending = null;
+  $('unlock-password').value = '';
+  show('start-view');
+  notice('Local encrypted wallet was erased from this browser.');
+}
+
+function lockWallet() {
+  session = null;
+  pending = null;
+  $('import-secret').value = '';
+  $('seed-words').replaceChildren();
+  show(localStorage.getItem(STORAGE_KEY) ? 'unlock-view' : 'start-view');
+}
+
+on('choose-create', () => show('create-view'));
+on('choose-import', () => show('import-view'));
+on('choose-watch', () => show('watch-view'));
+document.querySelectorAll('[data-back]').forEach(el => el.addEventListener('click', () => {
+  pending = null;
+  $('seed-words').replaceChildren();
+  show('start-view');
+}));
+on('generate-seed', generateNewWallet);
+$('backup-confirm').addEventListener('change', () => { $('finish-create').disabled = !$('backup-confirm').checked; });
+on('finish-create', finishCreate);
+on('do-import', importWallet);
+on('do-watch', watchAccount);
+on('do-unlock', unlockWallet);
+on('do-refresh', loadDashboard);
+on('do-send', send);
+on('do-check', inspectChallenge);
+on('do-lock', lockWallet);
+on('do-forget', forgetWallet);
+on('clear-locked', forgetWallet);
+on('copy-account', async () => {
+  if (!session) return;
+  await navigator.clipboard.writeText(session.accountId);
+  notice('Account ID copied to clipboard.');
+});
+on('copy-new-address', async () => {
+  if (!pending) return;
+  await navigator.clipboard.writeText(pending.accountId);
+  notice('Implicit account address copied.');
+});
+show(localStorage.getItem(STORAGE_KEY) ? 'unlock-view' : 'start-view');

@@ -18,7 +18,7 @@ That is the Synosis challenge.
 
 **We give you access. You prove whether you have control.**
 
-Participants receive a **restricted challenge recovery phrase** and the associated NEAR Testnet account name. The phrase is real, and it can be tested outside Synosis in a compatible wallet.
+Participants receive a **recovery phrase** and the associated NEAR Testnet account name. The phrase is real, and it can be tested outside Synosis in a compatible wallet.
 
 The task sounds simple:
 
